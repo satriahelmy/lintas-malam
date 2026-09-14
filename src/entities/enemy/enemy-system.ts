@@ -99,20 +99,22 @@ export class EnemySystem {
     const config = this.configs[archetype];
     const position = requestedPosition ?? this.getSpawnPosition(side);
     if (!this.isSafeSpawn(position, config.size, context)) return null;
+    const maxHealth = Math.max(1, config.maxHealth * this.tuning.healthMultiplier);
+    const attackIntervalMs = config.attackIntervalMs * this.tuning.attackIntervalMultiplier;
 
     const enemy: EnemyState = {
       id: `enemy-${this.nextEnemyId}`,
       x: position.x,
       y: position.y,
       radius: config.size,
-      health: config.maxHealth,
-      maxHealth: Math.max(1, config.maxHealth * this.tuning.healthMultiplier),
+      health: maxHealth,
+      maxHealth,
       active: true,
       archetype,
       spawnSide: side,
       speed: config.speed * this.tuning.speedMultiplier,
       damage: config.damage * this.tuning.damageMultiplier,
-      attackIntervalMs: config.attackIntervalMs * this.tuning.attackIntervalMultiplier,
+      attackIntervalMs,
       attackRange: config.attackRange,
       dropValue: Math.max(0, Math.floor(config.dropValue * this.tuning.dropMultiplier)),
       movementProfile: config.movementProfile,
@@ -120,7 +122,7 @@ export class EnemySystem {
       retargetIntervalMs: config.retargetIntervalMs,
       target: null,
       targetLockUntilMs: 0,
-      nextAttackAtMs: nowMs + config.attackIntervalMs,
+      nextAttackAtMs: nowMs + attackIntervalMs,
       hitFlashUntilMs: 0,
       wobblePhase: this.nextEnemyId * 0.73,
     };

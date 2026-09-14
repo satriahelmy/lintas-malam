@@ -28,7 +28,7 @@ export class ScrapSystem {
 
     const config = SCRAP_DROP_CONFIGS[request.archetype];
     if (randomValue() > config.dropChance) return null;
-    return this.spawnPickup(config.value || request.value, { x: request.x, y: request.y }, nowMs, 'ENEMY_DROP');
+    return this.spawnPickup(request.value || config.value, { x: request.x, y: request.y }, nowMs, 'ENEMY_DROP');
   }
 
   public spawnRewardPickup(value: number, position: Point, nowMs: number, source: Exclude<ScrapRewardSource, 'ENEMY_DROP'>): ScrapPickup | null {

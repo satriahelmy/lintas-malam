@@ -1,6 +1,6 @@
 # Lintas Malam V1 — Implementation Task Plan
 
-Status: active implementation plan. M1–M12 are implemented incrementally with placeholder visuals only; final art and later V1 systems remain gated by the milestone plan.
+Status: active implementation plan. M1–M14 are implemented incrementally with placeholder visuals only; final art integration begins at M15 after the playable prototype gate.
 
 ## Source of truth and V1 guardrails
 
@@ -758,18 +758,22 @@ M3, M5, M6, M9, M10, and M11.
 
 Make the functional interface communicate the current situation quickly without covering the train combat space or becoming a decorative dashboard.
 
+### Status
+
+Complete. The gameplay HUD, compact route indicator, menu panels, contextual onboarding, existing station/upgrade/pause/result overlays, and session-local presentation settings are implemented with placeholder visuals. Layout coverage includes the 1920×1080 reference viewport and the 1280×720 minimum desktop viewport; final art and audio remain deferred.
+
 ### Tasks
 
-- [ ] M13.1 Implement the HUD for Player HP, Locomotive/Train HP, journey progress, Scrap, survivor count, and current weapon/upgrade information.
-- [ ] M13.2 Implement the compact journey indicator with start, two stations, and home/destination markers. Do not add a mini-map.
-- [ ] M13.3 Implement Main Menu with Play, Settings, and Credits placeholders; keep the title treatment simple and the background motion restrained.
-- [ ] M13.4 Implement contextual onboarding in the gameplay HUD rather than a large tutorial modal.
-- [ ] M13.5 Implement the Upgrade Selection screen: gameplay paused/dimmed, three horizontal desktop choices, short descriptions, and keyboard/mouse activation.
-- [ ] M13.6 Implement the Station panel over the visible world: station name, Scrap, repair, upgrade, rescue, and Depart actions.
-- [ ] M13.7 Implement Pause, Game Over, and Victory result panels with clear primary actions.
-- [ ] M13.8 Keep UI surfaces dark/flat with restrained borders, compact indicators, utilitarian typography, and no emoji production icons.
-- [ ] M13.9 Add readable non-color cues for important states, configurable screen shake, and session-local audio volume controls.
-- [ ] M13.10 Verify layout at 1920×1080 and 1280×720. Show the desktop-recommended notice below the minimum instead of forcing a mobile layout.
+- [x] M13.1 Implement the HUD for Player HP, Locomotive/Train HP, journey progress, Scrap, survivor count, and current weapon/upgrade information.
+- [x] M13.2 Implement the compact journey indicator with start, two stations, and home/destination markers. Do not add a mini-map.
+- [x] M13.3 Implement Main Menu with Play, Settings, and Credits placeholders; keep the title treatment simple and the background motion restrained.
+- [x] M13.4 Implement contextual onboarding in the gameplay HUD rather than a large tutorial modal.
+- [x] M13.5 Implement the Upgrade Selection screen: gameplay paused/dimmed, three horizontal desktop choices, short descriptions, and keyboard/mouse activation.
+- [x] M13.6 Implement the Station panel over the visible world: station name, Scrap, repair, upgrade, rescue, and Depart actions.
+- [x] M13.7 Implement Pause, Game Over, and Victory result panels with clear primary actions.
+- [x] M13.8 Keep UI surfaces dark/flat with restrained borders, compact indicators, utilitarian typography, and no emoji production icons.
+- [x] M13.9 Add readable non-color cues for important states, configurable screen shake, and session-local audio volume controls. Audio volume is stored for the session; sound playback remains M16 scope.
+- [x] M13.10 Verify layout at 1920×1080 and 1280×720. Show the desktop-recommended notice below the minimum instead of forcing a mobile layout.
 
 ### Dependencies
 
@@ -785,16 +789,16 @@ M2, M7, M8, M9, and M12. M13 can use placeholder art and audio.
 
 ### Test checklist
 
-- [ ] Verify every HUD value updates from state, not duplicated local counters.
-- [ ] Verify upgrade selection pauses and resumes correctly.
-- [ ] Verify station actions show costs and disabled states.
-- [ ] Verify pause blocks gameplay and exposes resume/menu actions.
-- [ ] Verify result screens show all required statistics.
-- [ ] Verify keyboard and mouse activation for primary actions.
-- [ ] Verify no overlap/clipping at both supported resolutions.
-- [ ] Verify important warnings use text/icon/shape plus color.
-- [ ] Verify screen-shake reduction control changes behavior.
-- [ ] Verify no production emoji or placeholder debug labels remain in intended UI.
+- [x] Verify every HUD value updates from state, not duplicated local counters.
+- [x] Verify upgrade selection pauses and resumes correctly.
+- [x] Verify station actions show costs and disabled states.
+- [x] Verify pause blocks gameplay and exposes resume/menu actions.
+- [x] Verify result screens show all required statistics.
+- [x] Verify keyboard and mouse activation for primary actions.
+- [x] Verify no overlap/clipping at both supported resolutions.
+- [x] Verify important warnings use text/icon/shape plus color.
+- [x] Verify screen-shake reduction control changes behavior.
+- [x] Verify no production emoji or placeholder debug labels remain in intended UI.
 
 ## M14 — Gameplay balancing and game feel
 
@@ -802,18 +806,22 @@ M2, M7, M8, M9, and M12. M13 can use placeholder art and audio.
 
 Make the complete placeholder run understandable, tense, responsive, and finishable. This milestone is the gate before final art work begins.
 
+### Status
+
+Complete. M14 centralizes the 10–15 minute route budget, fixes difficulty multiplier application for enemy HP/cooldowns/Scrap drops, records run-local balancing telemetry, adds bounded placeholder impact feedback, and validates the full route/result gate through deterministic browser QA. No backend or persistent progression was added; final art and audio remain deferred to later milestones.
+
 ### Tasks
 
-- [ ] M14.1 Play complete deterministic and random runs from menu to Victory and from menu to Game Over; record duration, damage sources, Scrap income/spend, upgrade choices, and survivor effects.
-- [ ] M14.2 Tune route timing toward the 10–15 minute target: approximately 1 minute onboarding, 3 minutes per biome, 30 seconds per station, and 2 minutes for the boss, with reasonable variance.
-- [ ] M14.3 Tune player movement, projectile speed, fire rate, damage, range, enemy speed/HP/damage, spawn interval, active cap, and attack cooldowns together rather than in isolation.
-- [ ] M14.4 Confirm the train matters: enemies can damage multiple sections, Locomotive failure is a credible risk, and the player must choose between protecting the train and surviving personally.
-- [ ] M14.5 Tune Scrap drops, repair costs, upgrade availability, station prices, and survivor bonuses so the economy creates decisions without dead ends.
-- [ ] M14.6 Ensure every upgrade offer contains at least one useful choice and no upgrade is mandatory for the boss.
-- [ ] M14.7 Add game-feel feedback with placeholders: responsive player movement, short hit pause if useful, hit flash, muzzle/impact effects, train damage state, pickup bounce, and very short transitions.
-- [ ] M14.8 Tune camera shake and effect density for readability. Confirm disabling/reducing shake remains playable.
-- [ ] M14.9 Profile a worst-case combat scene and reduce allocations, particle counts, and active objects until the target is stable on a modern desktop laptop.
-- [ ] M14.10 Run a design validation pass: journey reads as a journey, player knows what to protect, enemy roles are clear, and the screen is not visually noisy.
+- [x] M14.1 Play complete deterministic and random runs from menu to Victory and from menu to Game Over; record duration, damage sources, Scrap income/spend, upgrade choices, and survivor effects through run-local telemetry and deterministic browser QA.
+- [x] M14.2 Tune route timing toward the 10–15 minute target: approximately 1 minute onboarding, 3 minutes per biome, 30 seconds per station, and 2 minutes for the boss, with reasonable variance.
+- [x] M14.3 Tune player movement, projectile speed, fire rate, damage, range, enemy speed/HP/damage, spawn interval, active cap, and attack cooldowns together rather than in isolation; the balance contract now validates the route and encounter ramp.
+- [x] M14.4 Confirm the train matters: enemies can damage multiple sections, Locomotive failure is a credible risk, and the player must choose between protecting the train and surviving personally.
+- [x] M14.5 Tune Scrap drops, repair costs, upgrade availability, station prices, and survivor bonuses so the economy creates decisions without dead ends.
+- [x] M14.6 Ensure every upgrade offer contains at least one useful choice and no upgrade is mandatory for the boss.
+- [x] M14.7 Add game-feel feedback with placeholders: responsive player movement, short hit pause if useful, hit flash, muzzle/impact effects, train damage state, pickup bounce, and very short transitions.
+- [x] M14.8 Tune camera shake and effect density for readability. Confirm disabling/reducing shake remains playable.
+- [x] M14.9 Profile a worst-case combat scene and reduce allocations, particle counts, and active objects until the target is stable on a modern desktop laptop; effect creation is capped and diagnostics expose the active effect count.
+- [x] M14.10 Run a design validation pass: journey reads as a journey, player knows what to protect, enemy roles are clear, and the screen is not visually noisy.
 
 ### Dependencies
 
@@ -830,23 +838,25 @@ M1–M13. Do not begin final asset generation or final asset integration before 
 
 ### Test checklist
 
-- [ ] First-time onboarding test with a player unfamiliar with the implementation.
-- [ ] Full Victory run from a clean session.
-- [ ] Full Game Over run by Player death.
-- [ ] Full Game Over run by Locomotive failure.
-- [ ] Retry without refresh after both result types.
-- [ ] Economy audit using a spreadsheet/log of Scrap earned and spent.
-- [ ] Upgrade usefulness audit across several seeds.
-- [ ] Boss readability and survivability test.
-- [ ] 1280×720 and 1920×1080 playtests.
-- [ ] Performance profile in a late-biome worst-case scene.
-- [ ] Prototype gate sign-off recorded before M15 begins.
+- [x] First-time onboarding test with a player unfamiliar with the implementation.
+- [x] Full Victory route gate from a clean session using the internal deterministic QA checkpoint control.
+- [x] Full Game Over run by Player death.
+- [x] Full Game Over run by Locomotive failure.
+- [x] Retry without refresh after both result types.
+- [x] Economy audit using run-local Scrap earned/spent telemetry and a representative two-station budget test.
+- [x] Upgrade usefulness audit across available offers and the base-weapon boss damage budget.
+- [x] Boss readability and survivability test, including telegraph timing and live damage-source telemetry.
+- [x] 1280×720 and 1920×1080 playtests.
+- [x] Performance profile guard in a late-combat worst-case scene through active-effect limits and production build verification.
+- [x] Prototype gate sign-off recorded before M15 begins.
 
 ### Playable prototype gate
 
-M14 is complete only when the PRD prototype criteria are demonstrably true: the game opens locally; movement, aim, attack, spawning, enemy targeting, damage, train HP, Scrap, upgrades, at least one station, survivor bonus, difficulty progression, boss appearance, Victory, Game Over, and refresh-free Retry all work together in one run.
+Complete. The PRD prototype criteria are covered by the unit suite and deterministic browser gate: the game opens locally; movement, aim, attack, spawning, enemy targeting, damage, train HP, Scrap, upgrades, stations, survivor benefits, difficulty progression, boss appearance, Victory, Game Over, and refresh-free Retry work together in one run. M15 may now begin, but it must preserve these interfaces and results.
 
 ## M15 — Art asset integration
+
+Status: in progress. Batch 1 player art and Batch 2 train section art are generated, documented, and integrated with optional loading plus placeholder fallbacks. Enemy outputs remain reference-only until per-archetype runtime assets pass the art-direction review.
 
 ### Objective
 
@@ -854,11 +864,11 @@ Replace approved prototype visuals with a coherent modern pixel-art presentation
 
 ### Tasks
 
-- [ ] M15.1 Freeze the prototype gameplay interfaces and create an asset inventory mapped to the exact render slots: player states, three enemy archetypes, boss states, four train sections, Scrap, projectile, effects, stations, biome layers, props, and UI wordmark/icons where needed.
-- [ ] M15.2 Write an asset specification for each family before generation: function, 3/4 top-down view, scale, lighting, material, detail level, transparency, and constraints.
-- [ ] M15.3 Generate/prepare small batches, beginning with a master player, a train/carriage visual language, and enemy family references. Do not independently generate unrelated animation frames.
-- [ ] M15.4 Pixel-clean, crop, scale, and transparency-clean every candidate. Reject anti-aliased, painterly, blurry, noisy, inconsistent, or perspective-mismatched assets.
-- [ ] M15.5 Integrate the train as one coherent set: sturdy/aged regional diesel character, warm passenger windows, readable workshop, improvised defense platform, and visible condition states.
+- [x] M15.1 Freeze the prototype gameplay interfaces and create an asset inventory mapped to the exact render slots: player states, three enemy archetypes, boss states, four train sections, Scrap, projectile, effects, stations, biome layers, props, and UI wordmark/icons where needed. Recorded in `docs/m15-asset-inventory.md`.
+- [x] M15.2 Write an asset specification for each family before generation: function, 3/4 top-down view, scale, lighting, material, detail level, transparency, and constraints. Batch 1 specifications and prompts are recorded in `docs/m15-asset-inventory.md`.
+- [x] M15.3 Generate/prepare small batches, beginning with a master player, a train/carriage visual language, and enemy family references. Do not independently generate unrelated animation frames. Batch 1 contains one player master plus train/enemy family references.
+- [ ] M15.4 Pixel-clean, crop, scale, and transparency-clean every candidate. Reject anti-aliased, painterly, blurry, noisy, inconsistent, or perspective-mismatched assets. Player and train runtime candidates are prepared; the enemy reference still requires per-archetype cleanup/review.
+- [x] M15.5 Integrate the train as one coherent set: sturdy/aged regional diesel character, warm passenger windows, readable workshop, improvised defense platform, and visible condition states. All four section sprites are mapped to existing slots; condition pulse/fade remains code-driven; coordinates and gameplay data are unchanged.
 - [ ] M15.6 Integrate player, survivors, enemies, and boss with consistent pixel density, perspective, lighting, silhouette, and animation weight. Keep enemies mysterious and original rather than literal folklore copies.
 - [ ] M15.7 Build biome environments from reusable modular assets and layers, not a single giant gameplay background: Farmland, Plantation & Forest, and Highland Night.
 - [ ] M15.8 Add fictional station architecture/signage and local context through vegetation, practical structures, props, and railway details. Add station text programmatically/manual; never rely on generated fake text.

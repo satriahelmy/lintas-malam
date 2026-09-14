@@ -126,8 +126,32 @@ describe('EnemySystem', () => {
     });
 
     const keeper = system.spawnWeighted('REAR', 0, context(), 0);
-    expect(keeper).toMatchObject({ archetype: 'KEEPER', maxHealth: 220, damage: 27, speed: 130, attackIntervalMs: 750, dropValue: 20 });
+    expect(keeper).toMatchObject({ archetype: 'KEEPER', health: 220, maxHealth: 220, damage: 27, speed: 130, attackIntervalMs: 750, dropValue: 20 });
     expect(system.getActiveCap()).toBe(1);
     expect(system.spawnWeighted('REAR', 0, context(), 0)).toBeNull();
+  });
+
+  it('uses the tuned attack interval for the first attack window', () => {
+    const system = new EnemySystem();
+    system.setTuning({
+      activeCap: 1,
+      spawnWeights: { MIST: 0, SHADOW: 0, KEEPER: 1 },
+      healthMultiplier: 1,
+      damageMultiplier: 1,
+      speedMultiplier: 1,
+      attackIntervalMultiplier: 0.5,
+      dropMultiplier: 1,
+    });
+    const tunedContext = context({
+      train: [{ id: 'DEFENSE', type: 'TRAIN', x: 420, y: 420, radius: 40, health: 100, maxHealth: 100, active: true }],
+    });
+    const keeper = system.spawn('KEEPER', 'REAR', 0, tunedContext, { x: 300, y: 420 });
+    expect(keeper).not.toBeNull();
+
+    const early = system.update(0.7, { ...tunedContext, nowMs: 700 });
+    const ready = system.update(0.1, { ...tunedContext, nowMs: 800 });
+
+    expect(early.filter((event) => event.type === 'attacked')).toHaveLength(0);
+    expect(ready.filter((event) => event.type === 'attacked')).toHaveLength(1);
   });
 });

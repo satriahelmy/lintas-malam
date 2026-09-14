@@ -6,9 +6,11 @@ import type { TrainSectionId } from '../core/run-state';
 import { SessionContext } from '../core/session-context';
 import { COLORS, DESIGN_VIEWPORT_HEIGHT, DESIGN_VIEWPORT_WIDTH } from '../game/game-config';
 import { SceneKeys } from '../game/scene-keys';
+import { OPTIONAL_IMAGE_ASSETS, TRAIN_IMAGE_ASSETS } from '../data/asset-config';
 import { getRoutePhaseDefinition } from '../data/route-config';
 import { ENEMY_SPAWN_SIDES } from '../data/enemy-config';
 import { BASE_WEAPON } from '../data/player-config';
+import { FEEDBACK_BALANCE, PLAYER_BALANCE } from '../data/balance-config';
 import { PLAYER_START_POSITION, TRAIN_COMBAT_BOUNDS, TRAIN_SECTION_LAYOUT } from '../data/train-config';
 import { BossSystem } from '../systems/boss-system';
 import type { BossSystemEvent, BossTargetContext } from '../entities/boss/boss-types';
@@ -48,9 +50,15 @@ function formatRunDuration(seconds: number): string {
   return `${minutes}:${remainingSeconds}`;
 }
 
+function formatHudBar(ratio: number, segments = 10): string {
+  const filled = Math.max(0, Math.min(segments, Math.round(ratio * segments)));
+  return `[${'█'.repeat(filled)}${'░'.repeat(segments - filled)}]`;
+}
+
 interface TrainSectionView {
   sectionId: TrainSectionId;
   body: Phaser.GameObjects.Rectangle;
+  sprite?: Phaser.GameObjects.Image;
   hpFill: Phaser.GameObjects.Rectangle;
   conditionText: Phaser.GameObjects.Text;
 }
@@ -93,6 +101,8 @@ interface SurvivorView {
   label: Phaser.GameObjects.Text;
 }
 
+type DamageSource = 'ENEMY' | 'BOSS' | 'DEBUG';
+
 const CONDITION_COLORS: Record<TrainCondition, number> = {
   HEALTHY: 0x6f9d76,
   DAMAGED: 0xd6a65f,
@@ -122,11 +132,20 @@ export class GameplayScene extends Phaser.Scene {
   private aimLine?: Phaser.GameObjects.Graphics;
   private aimCrosshair?: Phaser.GameObjects.Graphics;
   private playerMarker?: Phaser.GameObjects.Arc;
+  private playerSprite?: Phaser.GameObjects.Image;
   private playerShadow?: Phaser.GameObjects.Rectangle;
   private playerLabel?: Phaser.GameObjects.Text;
   private playerHpText?: Phaser.GameObjects.Text;
   private targetMarker?: Phaser.GameObjects.Arc;
   private targetHpText?: Phaser.GameObjects.Text;
+  private hudGraphics?: Phaser.GameObjects.Graphics;
+  private playerHudText?: Phaser.GameObjects.Text;
+  private trainHudText?: Phaser.GameObjects.Text;
+  private journeyHudText?: Phaser.GameObjects.Text;
+  private survivorHudText?: Phaser.GameObjects.Text;
+  private weaponHudText?: Phaser.GameObjects.Text;
+  private hudHintText?: Phaser.GameObjects.Text;
+  private readonly journeyMarkerLabels: Phaser.GameObjects.Text[] = [];
   private scrapHudText?: Phaser.GameObjects.Text;
   private upgradeShade?: Phaser.GameObjects.Rectangle;
   private upgradeTitle?: Phaser.GameObjects.Text;
@@ -188,6 +207,7 @@ export class GameplayScene extends Phaser.Scene {
   private debugTimeScale = 1;
   private currentBiomeId?: BiomeId;
   private elapsedMs = 0;
+  private activeFeedbackCount = 0;
   private enemySpawnElapsedMs = 0;
   private enemySpawnSideIndex = 0;
   private movementKeys?: Record<'left' | 'right' | 'up' | 'down', Phaser.Input.Keyboard.Key>;
@@ -235,6 +255,30 @@ export class GameplayScene extends Phaser.Scene {
     this.debugTimeScale = this.debugTimeScale === 1 ? 4 : 1;
     document.querySelector<HTMLElement>('#app-status')?.setAttribute('data-debug-time-scale', String(this.debugTimeScale));
     this.updateDebugOverlay();
+  };
+
+  private readonly handleDebugRouteAdvance = (): void => {
+    if (!this.debugEnabled) return;
+    const session = this.registry.get('session') as SessionContext | undefined;
+    const run = session?.run;
+    if (!session || !run) return;
+    if (session.gameState.value === 'STATION') {
+      this.departStation();
+      return;
+    }
+    if (session.gameState.value !== 'PLAYING') return;
+
+    const nextProgress: Partial<Record<typeof run.routePhase, number>> = {
+      DEPARTURE: getRoutePhaseDefinition('BIOME_1').startProgress,
+      BIOME_1: getRoutePhaseDefinition('STATION_1').startProgress,
+      BIOME_2: getRoutePhaseDefinition('STATION_2').startProgress,
+      BIOME_3: getRoutePhaseDefinition('BOSS').startProgress,
+    };
+    const progress = nextProgress[run.routePhase];
+    if (progress === undefined) return;
+    run.progress = progress;
+    this.updateHud();
+    this.updateDiagnostics();
   };
 
   private readonly handleDebugDefenseDamage = (): void => {
@@ -298,7 +342,7 @@ export class GameplayScene extends Phaser.Scene {
     if (!this.debugEnabled) return;
     const session = this.registry.get('session') as SessionContext | undefined;
     if (!session?.run) return;
-    this.applyDamageToPlayer(10);
+    this.applyDamageToPlayer(10, 'DEBUG');
   };
 
   private readonly handleDebugPlayerDefeat = (): void => {
@@ -406,6 +450,7 @@ export class GameplayScene extends Phaser.Scene {
     this.input.keyboard?.off('keydown-M', this.handleMenuKey);
     this.input.keyboard?.off('keydown-F3', this.handleDebugKey);
     this.input.keyboard?.off('keydown-F4', this.handleDebugTimeScale);
+    this.input.keyboard?.off('keydown-F6', this.handleDebugRouteAdvance);
     this.input.keyboard?.off('keydown-ONE', this.handleDebugDefenseDamage);
     this.input.keyboard?.off('keydown-TWO', this.handleDebugWorkshopDamage);
     this.input.keyboard?.off('keydown-THREE', this.handleDebugPassengerDamage);
@@ -439,6 +484,7 @@ export class GameplayScene extends Phaser.Scene {
     this.pointerPosition = { x: PLAYER_START_POSITION.x + 160, y: PLAYER_START_POSITION.y };
     this.playerInvulnerableUntilMs = 0;
     this.elapsedMs = 0;
+    this.activeFeedbackCount = 0;
     this.combatSystem = undefined;
     this.enemySystem = undefined;
     this.scrapSystem = undefined;
@@ -455,6 +501,14 @@ export class GameplayScene extends Phaser.Scene {
     this.upgradeCards.length = 0;
     this.stationSectionViews.length = 0;
     this.scrapHudText = undefined;
+    this.hudGraphics = undefined;
+    this.playerHudText = undefined;
+    this.trainHudText = undefined;
+    this.journeyHudText = undefined;
+    this.survivorHudText = undefined;
+    this.weaponHudText = undefined;
+    this.hudHintText = undefined;
+    this.journeyMarkerLabels.length = 0;
     this.survivorRosterTitle = undefined;
     this.bossView = undefined;
     this.bossTelegraph = undefined;
@@ -471,6 +525,7 @@ export class GameplayScene extends Phaser.Scene {
     this.worldBackground = undefined;
     this.worldSky = undefined;
     this.worldGround = undefined;
+    this.playerSprite = undefined;
     this.enemySpawnElapsedMs = 0;
     this.enemySpawnSideIndex = 0;
     this.activeUpgradeOffer = [];
@@ -514,7 +569,7 @@ export class GameplayScene extends Phaser.Scene {
     document.querySelector<HTMLElement>('#app-status')?.setAttribute('data-result-outcome', '');
     document.querySelector<HTMLElement>('#app-status')?.setAttribute('data-result-reason', '');
     this.cameraSystem = new CameraSystem(this.cameras.main);
-    this.cameraSystem.setShakeEnabled(true);
+    this.cameraSystem.setShakeEnabled(session?.settings.screenShakeEnabled ?? true);
     this.combatSystem = new CombatSystem();
     this.enemySystem = new EnemySystem();
     this.upgradeSystem = new UpgradeSystem();
@@ -530,11 +585,15 @@ export class GameplayScene extends Phaser.Scene {
       this.eventBus = new GameEventBus();
       this.trainSystem = new TrainSystem(session.run, this.eventBus);
       this.eventBus.on('locomotive-failed', () => this.checkTerminalState());
+      this.eventBus.on('train-section-damaged', (event) => {
+        if (event.amount > 0) this.createTrainDamageFeedback(event.sectionId);
+      });
     }
     this.applyRouteTuning();
     this.spawnEnemy('MIST', 'UPPER');
 
     this.drawPlaceholderWorld();
+    this.createGameplayHud();
     this.createSurvivorRoster();
     this.createPlayerAndAim();
     this.createCombatTarget();
@@ -549,6 +608,7 @@ export class GameplayScene extends Phaser.Scene {
     this.updateBiomePresentation();
     this.setupInput();
     this.updateResultOverlay();
+    this.updateHud();
     this.updateDiagnostics();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown);
   }
@@ -556,7 +616,14 @@ export class GameplayScene extends Phaser.Scene {
   public update(_time: number, delta: number): void {
     this.updateTrainViews();
     const session = this.registry.get('session') as SessionContext | undefined;
-    if (!session || (session.gameState.value !== 'PLAYING' && session.gameState.value !== 'BOSS')) return;
+    if (!session) return;
+    if (session.gameState.value === 'STATION' && session.run) {
+      session.run.elapsedSeconds += Math.min(Math.max(0, delta) / 1000, 0.25);
+      this.updateHud();
+      this.updateDiagnostics();
+      return;
+    }
+    if (session.gameState.value !== 'PLAYING' && session.gameState.value !== 'BOSS') return;
 
     const scaledDelta = delta * this.debugTimeScale;
     const deltaSeconds = Math.min(scaledDelta / 1000, 0.25);
@@ -605,18 +672,6 @@ export class GameplayScene extends Phaser.Scene {
     this.createParallaxLayer(360, 120, 0x27443f, 22, 280, 8);
     this.createParallaxLayer(810, 150, 0x345049, 34, 240, 9);
 
-    this.add.text(96, 72, 'M10 ROUTE & DIFFICULTY', {
-      color: COLORS.mutedText,
-      fontFamily: 'Arial, Helvetica, sans-serif',
-      fontSize: '22px',
-      letterSpacing: 3,
-    });
-    this.add.text(96, 108, 'WASD MOVE  •  MOUSE AIM  •  LEFT CLICK FIRE  •  F3 DEBUG', {
-      color: COLORS.mutedText,
-      fontFamily: 'Arial, Helvetica, sans-serif',
-      fontSize: '18px',
-    });
-
     const trackY = 680;
     this.add.rectangle(260, trackY, 1400, 6, 0x4e5b57).setOrigin(0.5);
     this.add.rectangle(260, trackY + 44, 1400, 6, 0x4e5b57).setOrigin(0.5);
@@ -626,6 +681,11 @@ export class GameplayScene extends Phaser.Scene {
 
     for (const section of TRAIN_SECTION_LAYOUT) {
       const body = this.add.rectangle(section.x, section.y, section.width, section.height, section.color).setOrigin(0.5);
+      const asset = TRAIN_IMAGE_ASSETS[section.id];
+      const sprite = this.textures.exists(asset.key)
+        ? this.add.image(section.x, section.y, asset.key).setDisplaySize(section.width, section.height).setDepth(1)
+        : undefined;
+      body.setVisible(!sprite);
       const barWidth = section.width - 20;
       this.add.rectangle(section.x, section.y + 44, barWidth, 10, 0x253033).setOrigin(0.5);
       const hpFill = this.add.rectangle(section.x - barWidth / 2, section.y + 44, barWidth, 10, CONDITION_COLORS.HEALTHY).setOrigin(0, 0.5);
@@ -640,19 +700,9 @@ export class GameplayScene extends Phaser.Scene {
         fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: '14px',
       }).setOrigin(0.5);
-      this.trainViews.push({ sectionId: section.id, body, hpFill, conditionText });
+      this.trainViews.push({ sectionId: section.id, body, sprite, hpFill, conditionText });
     }
 
-    this.scrapHudText = this.add.text(96, 940, '', {
-      color: COLORS.text,
-      fontFamily: 'Arial, Helvetica, sans-serif',
-      fontSize: '20px',
-    });
-    this.add.text(DESIGN_VIEWPORT_WIDTH - 96, 1010, 'ESC  PAUSE     M  MENU', {
-      color: COLORS.mutedText,
-      fontFamily: 'Arial, Helvetica, sans-serif',
-      fontSize: '16px',
-    }).setOrigin(1, 0.5);
     this.updateTrainViews();
     this.updateHud();
   }
@@ -699,6 +749,16 @@ export class GameplayScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(3);
     this.playerMarker = this.add.circle(this.playerPosition.x, this.playerPosition.y, 24, COLORS.player).setDepth(4);
+    if (this.textures.exists(OPTIONAL_IMAGE_ASSETS.playerIdle.key)) {
+      this.playerSprite = this.add.image(
+        this.playerPosition.x,
+        this.playerPosition.y,
+        OPTIONAL_IMAGE_ASSETS.playerIdle.key,
+      )
+        .setDisplaySize(48, 84)
+        .setDepth(4);
+      this.playerMarker.setVisible(false);
+    }
     this.playerLabel = this.add.text(this.playerPosition.x, this.playerPosition.y - 55, 'PLAYER', {
       color: COLORS.text,
       fontFamily: 'Arial, Helvetica, sans-serif',
@@ -716,6 +776,7 @@ export class GameplayScene extends Phaser.Scene {
 
   private updatePlayerAndAim(): void {
     this.playerMarker?.setPosition(this.playerPosition.x, this.playerPosition.y);
+    this.playerSprite?.setPosition(this.playerPosition.x, this.playerPosition.y);
     this.playerShadow?.setPosition(this.playerPosition.x, this.playerPosition.y + 35);
     this.playerLabel?.setPosition(this.playerPosition.x, this.playerPosition.y - 55);
     this.playerHpText?.setPosition(this.playerPosition.x, this.playerPosition.y + 52);
@@ -901,13 +962,17 @@ export class GameplayScene extends Phaser.Scene {
     const session = this.registry.get('session') as SessionContext | undefined;
     for (const event of events) {
       if (event.type === 'attacked') {
-        this.applyDamageToPlayer(event.damage);
+        this.applyDamageToPlayer(event.damage, 'BOSS');
       } else if (event.type === 'area-telegraph') {
         this.bossTelegraph?.setVisible(true).setPosition(event.x, event.y).setScale(event.radius / 10);
       } else if (event.type === 'area-hit') {
         this.bossTelegraph?.setVisible(false);
-        if (event.targetType === 'PLAYER') this.applyDamageToPlayer(event.damage);
-        else this.trainSystem?.damage(event.targetId as TrainSectionId, event.damage);
+        if (event.targetType === 'PLAYER') {
+          this.applyDamageToPlayer(event.damage, 'BOSS');
+        } else {
+          const change = this.trainSystem?.damage(event.targetId as TrainSectionId, event.damage);
+          this.recordTrainDamage(change?.appliedAmount ?? 0, 'BOSS');
+        }
       } else if (event.type === 'state-changed') {
         setAppStatus(`Raksasa Alas — ${event.state}`, 'gameplay');
       } else if (event.type === 'defeated' && session?.run && !this.bossDefeatHandled) {
@@ -1058,7 +1123,10 @@ export class GameplayScene extends Phaser.Scene {
       this.worldGround?.setFillStyle(0x7e8067);
       setAppStatus('Victory — Destination', 'gameplay');
     } else {
-      for (const view of this.trainViews) view.body.setAlpha(0.45);
+      for (const view of this.trainViews) {
+        view.body.setAlpha(0.45);
+        view.sprite?.setAlpha(0.45);
+      }
       setAppStatus('Game Over', 'gameplay');
     }
     this.updateUpgradeOverlay();
@@ -1285,8 +1353,12 @@ export class GameplayScene extends Phaser.Scene {
     const session = this.registry.get('session') as SessionContext | undefined;
     for (const event of events) {
       if (event.type === 'attacked') {
-        if (event.targetType === 'PLAYER') this.applyDamageToPlayer(event.damage);
-        else this.trainSystem?.damage(event.targetId as TrainSectionId, event.damage);
+        if (event.targetType === 'PLAYER') {
+          this.applyDamageToPlayer(event.damage, 'ENEMY');
+        } else {
+          const change = this.trainSystem?.damage(event.targetId as TrainSectionId, event.damage);
+          this.recordTrainDamage(change?.appliedAmount ?? 0, 'ENEMY');
+        }
       } else if (event.type === 'defeated' && session?.run) {
         session.run.enemiesDefeated += 1;
       } else if (event.type === 'scrap-drop') {
@@ -1327,7 +1399,8 @@ export class GameplayScene extends Phaser.Scene {
     for (const pickup of pickups) {
       activeIds.add(pickup.id);
       const view = this.scrapViews.get(pickup.id) ?? this.createScrapView(pickup);
-      view.shape.setPosition(pickup.x, pickup.y + Math.sin(pickup.bobPhase) * 3);
+      const bob = Math.sin(pickup.bobPhase);
+      view.shape.setPosition(pickup.x, pickup.y + bob * FEEDBACK_BALANCE.pickupBobPixels).setScale(1 + bob * 0.08);
       this.scrapViews.set(pickup.id, view);
     }
 
@@ -1339,14 +1412,61 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private createScrapCollectFlash(event: Extract<ScrapSystemEvent, { type: 'collected' }>): void {
+    if (!this.reserveFeedback()) return;
     const flash = this.add.rectangle(event.x, event.y, 16, 3, 0xd6a65f).setDepth(7);
     this.tweens.add({
       targets: flash,
       alpha: 0,
       scaleX: 1.8,
-      duration: 100,
-      onComplete: () => flash.destroy(),
+      duration: FEEDBACK_BALANCE.hitFlashDurationMs,
+      onComplete: () => this.releaseFeedback(flash),
     });
+  }
+
+  private reserveFeedback(): boolean {
+    if (this.activeFeedbackCount >= FEEDBACK_BALANCE.maxConcurrentEffects) return false;
+    this.activeFeedbackCount += 1;
+    return true;
+  }
+
+  private releaseFeedback(object: Phaser.GameObjects.GameObject): void {
+    this.activeFeedbackCount = Math.max(0, this.activeFeedbackCount - 1);
+    object.destroy();
+  }
+
+  private createGameplayHud(): void {
+    const textStyle = {
+      color: COLORS.text,
+      fontFamily: 'monospace',
+      fontSize: '18px',
+    };
+    this.hudGraphics = this.add.graphics().setDepth(8);
+    this.playerHudText = this.add.text(96, 32, '', textStyle).setDepth(8);
+    this.trainHudText = this.add.text(96, 70, '', { ...textStyle, color: '#b7d1b4' }).setDepth(8);
+    this.journeyHudText = this.add.text(DESIGN_VIEWPORT_WIDTH - 96, 32, '', {
+      ...textStyle,
+      color: '#f3c777',
+      align: 'right',
+    }).setOrigin(1, 0).setDepth(8);
+    this.survivorHudText = this.add.text(330, 962, '', { ...textStyle, color: '#b7d1b4' }).setDepth(8);
+    this.scrapHudText = this.add.text(96, 962, '', { ...textStyle, color: '#f3c777' }).setDepth(8);
+    this.weaponHudText = this.add.text(680, 962, '', { ...textStyle, color: COLORS.mutedText }).setDepth(8);
+    this.hudHintText = this.add.text(DESIGN_VIEWPORT_WIDTH - 96, 962, 'ESC  PAUSE   M  MENU', {
+      ...textStyle,
+      color: COLORS.mutedText,
+      align: 'right',
+    }).setOrigin(1, 0).setDepth(8);
+
+    const markerLabels = ['START', 'ST.01', 'ST.02', 'BOSS', 'HOME'];
+    for (const label of markerLabels) {
+      this.journeyMarkerLabels.push(this.add.text(0, 0, label, {
+        color: COLORS.mutedText,
+        fontFamily: 'monospace',
+        fontSize: '11px',
+        align: 'center',
+      }).setOrigin(0.5, 0).setDepth(8));
+    }
+    this.updateHud();
   }
 
   private updateHud(): void {
@@ -1354,9 +1474,39 @@ export class GameplayScene extends Phaser.Scene {
     const run = session?.run;
     if (!run) return;
     const biome = this.routeSystem?.getBiome(run);
-    this.scrapHudText?.setText(
-      `TRAIN HP  [SECTION STATUS ABOVE]     PLAYER HP ${Math.ceil(run.player.health)}/${run.player.maxHealth}     SCRAP  ${run.scrap}     JOURNEY  ${Math.floor(run.progress)}%  ${run.routePhase}  ${biome?.name ?? ''}`,
-    );
+    const trainMaxHp = run.train.reduce((sum, section) => sum + section.maxHp, 0);
+    const trainHp = run.train.reduce((sum, section) => sum + section.currentHp, 0);
+    const locomotive = run.train.find((section) => section.id === 'LOCOMOTIVE');
+    const playerRatio = run.player.maxHealth > 0 ? run.player.health / run.player.maxHealth : 0;
+    const trainRatio = trainMaxHp > 0 ? trainHp / trainMaxHp : 0;
+    this.playerHudText?.setText(`PLAYER  HP ${Math.ceil(run.player.health)}/${run.player.maxHealth}  ${formatHudBar(playerRatio)}`);
+    this.trainHudText?.setText(`TRAIN   ${Math.round(trainRatio * 100)}%  ${formatHudBar(trainRatio)}   LOCOMOTIVE ${Math.ceil(locomotive?.currentHp ?? 0)}/${locomotive?.maxHp ?? 0}`);
+    this.journeyHudText?.setText(`JOURNEY  ${Math.floor(run.progress)}%  ${run.routePhase}  ${biome?.name ?? ''}`);
+    this.scrapHudText?.setText(`SCRAP  ${run.scrap}`);
+    this.survivorHudText?.setText(`SURVIVORS  ${run.survivorIds.length}/4`);
+    this.weaponHudText?.setText(`WEAPON  DMG ${Math.ceil(run.player.damage)}  RATE ${run.player.fireRate.toFixed(1)}  RANGE ${Math.ceil(run.player.weaponRange)}  •  UPGRADES ${run.upgradeIds.length}`);
+
+    const markers = this.routeSystem?.getMarkers(run);
+    if (!this.hudGraphics || !markers) return;
+    const markerProgress = [0, ...markers.stationProgress, markers.bossProgress, 100];
+    const markerX = markerProgress.map((progress) => 1400 + (410 * progress) / 100);
+    this.hudGraphics.clear();
+    this.hudGraphics.lineStyle(2, 0x4e5b57, 0.95);
+    this.hudGraphics.lineBetween(markerX[0], 82, markerX[markerX.length - 1], 82);
+    for (let index = 0; index < markerX.length; index += 1) {
+      const reached = run.progress >= markerProgress[index];
+      const color = reached ? 0xd6a65f : 0x4e5b57;
+      if (index === markerX.length - 1) {
+        this.hudGraphics.fillStyle(color, 1);
+        this.hudGraphics.fillTriangle(markerX[index], 72, markerX[index] + 9, 82, markerX[index], 92);
+      } else {
+        this.hudGraphics.fillStyle(color, 1);
+        this.hudGraphics.fillCircle(markerX[index], 82, index === 3 ? 7 : 5);
+        this.hudGraphics.lineStyle(2, reached ? 0xf3c777 : 0x4e5b57, 0.95);
+        this.hudGraphics.strokeCircle(markerX[index], 82, index === 3 ? 10 : 8);
+      }
+      this.journeyMarkerLabels[index]?.setPosition(markerX[index], 96).setColor(reached ? '#f3c777' : COLORS.mutedText);
+    }
   }
 
   private createSurvivorRoster(): void {
@@ -1503,9 +1653,11 @@ export class GameplayScene extends Phaser.Scene {
     }
     this.activeUpgradeOffer = [];
     this.defenseTurretSystem?.setLevel(this.upgradeSystem.getLevel(session.run, 'DEFENSE_TURRET'));
+    session.run.telemetry.upgradeChoices.push(definition.id);
 
     if (stationPurchase) {
       this.stationUpgradeMode = false;
+      session.run.telemetry.stationUpgrades += 1;
       this.stationMessage?.setText(`${definition.name} Lv.${result.level} installed at the station.`);
       setAppStatus(`${definition.name} Lv.${result.level}`, 'gameplay');
       this.updateUpgradeOverlay();
@@ -1804,6 +1956,7 @@ export class GameplayScene extends Phaser.Scene {
       this.scrapSystem.refund(quote.cost);
       this.stationMessage?.setText('Repair did not change this section. Scrap refunded.');
     } else {
+      run.telemetry.stationRepairs += 1;
       this.stationMessage?.setText(`Repaired ${this.stationSelectedSection} by ${Math.ceil(repairedAmount)} HP.`);
     }
     this.updateStationOverlay();
@@ -1924,38 +2077,89 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private createMuzzleFlash(): void {
+    if (!this.reserveFeedback()) return;
     const flash = this.add.circle(this.playerPosition.x, this.playerPosition.y, 16, 0xf3c777).setDepth(7);
     this.tweens.add({
       targets: flash,
       alpha: 0,
       scale: 0.5,
-      duration: 70,
-      onComplete: () => flash.destroy(),
+      duration: FEEDBACK_BALANCE.muzzleFlashDurationMs,
+      onComplete: () => this.releaseFeedback(flash),
     });
   }
 
   private createHitFlash(hit: ProjectileHitEvent): void {
+    if (!this.reserveFeedback()) return;
     const flash = this.add.circle(hit.x, hit.y, 18, 0xf18b6f).setDepth(7);
     this.tweens.add({
       targets: flash,
       alpha: 0,
       scale: 1.35,
-      duration: 110,
-      onComplete: () => flash.destroy(),
+      duration: FEEDBACK_BALANCE.hitFlashDurationMs,
+      onComplete: () => this.releaseFeedback(flash),
     });
-    this.cameraSystem?.triggerShake(55, 0.0025);
+    this.cameraSystem?.triggerShake(FEEDBACK_BALANCE.impactShakeDurationMs, FEEDBACK_BALANCE.impactShakeIntensity);
   }
 
-  private applyDamageToPlayer(amount: number): void {
+  private createPlayerDamageFlash(): void {
+    if (!this.reserveFeedback()) return;
+    const flash = this.add.circle(this.playerPosition.x, this.playerPosition.y, 28, 0xf18b6f, 0.15)
+      .setDepth(7)
+      .setStrokeStyle(3, 0xf18b6f, 0.9);
+    this.tweens.add({
+      targets: flash,
+      alpha: 0,
+      scale: 1.2,
+      duration: FEEDBACK_BALANCE.damageFlashDurationMs,
+      onComplete: () => this.releaseFeedback(flash),
+    });
+    this.cameraSystem?.triggerShake(FEEDBACK_BALANCE.impactShakeDurationMs, FEEDBACK_BALANCE.impactShakeIntensity);
+  }
+
+  private createTrainDamageFeedback(sectionId: TrainSectionId): void {
+    const view = this.trainViews.find((candidate) => candidate.sectionId === sectionId);
+    if (!view || !this.reserveFeedback()) return;
+    const flash = this.add.rectangle(view.body.x, view.body.y, view.body.width + 18, view.body.height + 14, 0xf18b6f, 0.12)
+      .setDepth(6)
+      .setStrokeStyle(3, 0xf18b6f, 0.95);
+    this.tweens.add({
+      targets: flash,
+      alpha: 0,
+      scale: 1.04,
+      duration: FEEDBACK_BALANCE.trainImpactFlashDurationMs,
+      onComplete: () => this.releaseFeedback(flash),
+    });
+    this.cameraSystem?.triggerShake(FEEDBACK_BALANCE.heavyImpactShakeDurationMs, FEEDBACK_BALANCE.heavyImpactShakeIntensity);
+  }
+
+  private recordTrainDamage(amount: number, source: Exclude<DamageSource, 'DEBUG'>): void {
+    if (amount <= 0) return;
+    const session = this.registry.get('session') as SessionContext | undefined;
+    const telemetry = session?.run?.telemetry;
+    if (!telemetry) return;
+    telemetry.trainDamageTaken += amount;
+    if (source === 'BOSS') telemetry.bossDamageToTrain += amount;
+    else telemetry.enemyDamageToTrain += amount;
+  }
+
+  private applyDamageToPlayer(amount: number, source: DamageSource = 'ENEMY'): void {
     const session = this.registry.get('session') as SessionContext | undefined;
     const player = session?.run?.player;
     if (!session || !player || (session.gameState.value !== 'PLAYING' && session.gameState.value !== 'BOSS')) return;
 
-    const result = applyPlayerDamage(player, amount, this.elapsedMs, this.playerInvulnerableUntilMs);
+    const result = applyPlayerDamage(player, amount, this.elapsedMs, this.playerInvulnerableUntilMs, PLAYER_BALANCE.invulnerabilityMs);
     this.playerInvulnerableUntilMs = result.invulnerableUntilMs;
     if (result.appliedDamage > 0) {
       this.lastPlayerDamageAtMs = this.elapsedMs;
-      this.createMuzzleFlash();
+      if (source !== 'DEBUG') {
+        const telemetry = session.run?.telemetry;
+        if (telemetry) {
+          telemetry.playerDamageTaken += result.appliedDamage;
+          if (source === 'BOSS') telemetry.bossDamageToPlayer += result.appliedDamage;
+          else telemetry.enemyDamageToPlayer += result.appliedDamage;
+        }
+      }
+      this.createPlayerDamageFlash();
     }
     this.updatePlayerAndAim();
     this.checkTerminalState();
@@ -1974,20 +2178,23 @@ export class GameplayScene extends Phaser.Scene {
       view.hpFill.width = (layout.width - 20) * ratio;
       view.hpFill.setFillStyle(CONDITION_COLORS[condition]);
       view.body.setStrokeStyle(3, CONDITION_COLORS[condition]);
-      view.body.setAlpha(condition === 'DESTROYED' ? 0.45 : 1);
+      const criticalPulse = condition === 'CRITICAL' ? 0.82 + Math.sin(this.elapsedMs / 130) * 0.18 : 1;
+      const resultFade = this.activeResult?.outcome === 'GAME_OVER' ? 0.45 : 1;
+      view.body.setAlpha(condition === 'DESTROYED' ? 0.45 : criticalPulse * resultFade);
+      view.sprite?.setAlpha(condition === 'DESTROYED' ? 0.45 : criticalPulse * resultFade);
       view.conditionText.setColor(CONDITION_TEXT_COLORS[condition]);
       view.conditionText.setText(`HP ${Math.ceil(section.currentHp)}/${section.maxHp}  •  ${condition}`);
     }
   }
 
   private createOnboarding(): void {
-    this.add.text(1400, 105, 'ONBOARDING', {
+    this.add.text(1580, 156, 'ONBOARDING', {
       color: '#d6a65f',
       fontFamily: 'Arial, Helvetica, sans-serif',
       fontSize: '16px',
       letterSpacing: 2,
     }).setOrigin(0.5).setName('onboarding-title');
-    this.add.text(1400, 140, '', {
+    this.add.text(1580, 198, '', {
       color: COLORS.text,
       backgroundColor: '#11191d',
       fontFamily: 'Arial, Helvetica, sans-serif',
@@ -2052,12 +2259,12 @@ export class GameplayScene extends Phaser.Scene {
     const trainSummary = run?.train.map((section) => `${section.id}:${Math.ceil(section.currentHp)}`).join(' ') ?? 'none';
     this.debugText.setText([
       `STATE: ${session?.gameState.value ?? 'UNKNOWN'}`,
-      `PLAYER: placeholder-player @ (${Math.round(this.playerPosition.x)}, ${Math.round(this.playerPosition.y)})`,
+      `PLAYER: ${this.playerSprite ? 'art-player-idle' : 'placeholder-player'} @ (${Math.round(this.playerPosition.x)}, ${Math.round(this.playerPosition.y)})`,
       `BOUNDS: (${TRAIN_COMBAT_BOUNDS.left}, ${TRAIN_COMBAT_BOUNDS.top}) → (${TRAIN_COMBAT_BOUNDS.right}, ${TRAIN_COMBAT_BOUNDS.bottom})`,
       `TRAIN HP: ${trainSummary}`,
       `ENEMIES: ${this.enemySystem?.getActiveCount() ?? 0}/${12}`,
       `BOSS: ${this.bossSystem?.getState()?.behaviorState ?? 'OFF'} ${Math.ceil(this.bossSystem?.getState()?.health ?? 0)}`,
-      `F3: toggle • F4: time scale ${this.debugTimeScale}x • B: boss • C: boss damage • X: player defeat • 0: station • 1–4: train/select • 5/6/7: spawn Mist/Shadow/Keeper • 8: scrap pickup • 9: offer • Q: player damage • R: repair/reset/retry`,
+      `F3: toggle • F4: time scale ${this.debugTimeScale}x • F6: next route checkpoint • B: boss • C: boss damage • X: player defeat • 0: station • 1–4: train/select • 5/6/7: spawn Mist/Shadow/Keeper • 8: scrap pickup • 9: offer • Q: player damage • R: repair/reset/retry`,
     ]);
   }
 
@@ -2076,6 +2283,7 @@ export class GameplayScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-M', this.handleMenuKey);
     this.input.keyboard.on('keydown-F3', this.handleDebugKey);
     this.input.keyboard.on('keydown-F4', this.handleDebugTimeScale);
+    this.input.keyboard.on('keydown-F6', this.handleDebugRouteAdvance);
     this.input.keyboard.on('keydown-ONE', this.handleDebugDefenseDamage);
     this.input.keyboard.on('keydown-TWO', this.handleDebugWorkshopDamage);
     this.input.keyboard.on('keydown-THREE', this.handleDebugPassengerDamage);
@@ -2115,6 +2323,9 @@ export class GameplayScene extends Phaser.Scene {
     status.dataset.aimX = String(Math.round(this.pointerPosition.x));
     status.dataset.aimY = String(Math.round(this.pointerPosition.y));
     status.dataset.aimed = String(this.onboarding.aimed);
+    status.dataset.onboardingMoved = String(this.onboarding.moved);
+    status.dataset.onboardingAimed = String(this.onboarding.aimed);
+    status.dataset.onboardingAttacked = String(this.onboarding.attacked);
     const session = this.registry.get('session') as SessionContext | undefined;
     const player = session?.run?.player;
     const target = this.combatTargets[0];
@@ -2127,7 +2338,9 @@ export class GameplayScene extends Phaser.Scene {
     status.dataset.scrap = String(session?.run?.scrap ?? 0);
     status.dataset.scrapCollected = String(session?.run?.scrapCollected ?? 0);
     status.dataset.scrapSpent = String(session?.run?.scrapSpent ?? 0);
+    status.dataset.runTimeSeconds = String(Math.floor(session?.run?.elapsedSeconds ?? 0));
     status.dataset.pickups = String(this.scrapSystem?.getPickups().length ?? 0);
+    status.dataset.activeEffects = String(this.activeFeedbackCount);
     status.dataset.upgradeOpen = String(this.isUpgradeOpen());
     status.dataset.upgradeIds = session?.run?.upgradeIds.join(',') ?? '';
     status.dataset.upgradeOffer = this.activeUpgradeOffer.map((definition) => definition.id).join(',');
@@ -2149,9 +2362,23 @@ export class GameplayScene extends Phaser.Scene {
     status.dataset.resultOutcome = this.activeResult?.outcome ?? '';
     status.dataset.resultReason = this.activeResult?.reason ?? '';
     status.dataset.resultProgress = this.activeResult ? String(Math.floor(this.activeResult.progress)) : '';
+    status.dataset.screenShake = String(session?.settings.screenShakeEnabled ?? true);
+    status.dataset.audioVolume = String(Math.round((session?.settings.audioVolume ?? 0.8) * 100));
     status.dataset.survivorBenefits = session?.run && this.survivorSystem
       ? this.survivorSystem.getBenefitState(session.run)
       : 'DISABLED';
+    const telemetry = session?.run?.telemetry;
+    status.dataset.playerDamageTaken = String(telemetry?.playerDamageTaken ?? 0);
+    status.dataset.playerArt = this.playerSprite ? OPTIONAL_IMAGE_ASSETS.playerIdle.key : 'placeholder-player';
+    status.dataset.trainArt = this.trainViews.map((view) => `${view.sectionId}:${view.sprite ? 'art' : 'placeholder'}`).join(',');
+    status.dataset.enemyDamageToPlayer = String(telemetry?.enemyDamageToPlayer ?? 0);
+    status.dataset.bossDamageToPlayer = String(telemetry?.bossDamageToPlayer ?? 0);
+    status.dataset.trainDamageTaken = String(telemetry?.trainDamageTaken ?? 0);
+    status.dataset.enemyDamageToTrain = String(telemetry?.enemyDamageToTrain ?? 0);
+    status.dataset.bossDamageToTrain = String(telemetry?.bossDamageToTrain ?? 0);
+    status.dataset.stationRepairs = String(telemetry?.stationRepairs ?? 0);
+    status.dataset.stationUpgrades = String(telemetry?.stationUpgrades ?? 0);
+    status.dataset.upgradeChoices = telemetry?.upgradeChoices.join(',') ?? '';
     const route = session?.run && this.routeSystem;
     if (route && session?.run) {
       const markers = route.getMarkers(session.run);

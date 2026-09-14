@@ -18,6 +18,15 @@ describe('ScrapSystem', () => {
     expect(scrap.getPickups()).toHaveLength(1);
   });
 
+  it('honors encounter-scaled enemy drop values', () => {
+    const run = createInitialRunState();
+    const scrap = new ScrapSystem(run);
+
+    const pickup = scrap.handleEnemyDrop({ enemyId: 'enemy-scaled', archetype: 'MIST', value: 6, x: 100, y: 100 }, 0, () => 0);
+
+    expect(pickup?.value).toBe(6);
+  });
+
   it('attracts a pickup and collects it once within the player radius', () => {
     const run = createInitialRunState();
     const scrap = new ScrapSystem(run);

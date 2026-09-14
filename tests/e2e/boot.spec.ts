@@ -20,6 +20,132 @@ test('starts a run from the main menu', async ({ page }) => {
   await expect(page).toHaveTitle(/Lintas Malam — Gameplay Prototype/);
 });
 
+test('loads the M15 player master while keeping the fallback boundary observable', async ({ page }) => {
+  const consoleErrors: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+
+  await page.goto('/');
+  const canvas = page.locator('canvas');
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) return;
+
+  await page.mouse.click(box.x + box.width * (960 / 1920), box.y + box.height * (560 / 1080));
+  await expect(page.locator('#app-status')).toHaveAttribute('data-player-art', 'art-player-idle');
+  expect(consoleErrors.filter((message) => /player_idle|missing texture/i.test(message))).toEqual([]);
+});
+
+test('loads all four M15.5 train section sprites without changing the train slots', async ({ page }) => {
+  await page.goto('/');
+  const canvas = page.locator('canvas');
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) return;
+
+  await page.mouse.click(box.x + box.width * (960 / 1920), box.y + box.height * (560 / 1080));
+  await expect(page.locator('#app-status')).toHaveAttribute(
+    'data-train-art',
+    'DEFENSE:art,WORKSHOP:art,PASSENGER:art,LOCOMOTIVE:art',
+  );
+  await expect(page.locator('#app-status')).toHaveAttribute('data-route-phase', 'DEPARTURE');
+});
+
+test('opens menu settings and credits, and carries session settings into gameplay', async ({ page }) => {
+  await page.goto('/');
+  const canvas = page.locator('canvas');
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) return;
+
+  const clickLogical = async (x: number, y: number): Promise<void> => {
+    await page.mouse.click(box.x + box.width * (x / 1920), box.y + box.height * (y / 1080));
+  };
+
+  await clickLogical(960, 640);
+  const status = page.locator('#app-status');
+  await expect(page).toHaveTitle(/Lintas Malam — Settings/);
+  await expect(status).toHaveAttribute('data-screen-shake', 'true');
+  await expect(status).toHaveAttribute('data-audio-volume', '80');
+
+  await clickLogical(960, 535);
+  await clickLogical(1120, 600);
+  await expect(status).toHaveAttribute('data-screen-shake', 'false');
+  await expect(status).toHaveAttribute('data-audio-volume', '90');
+
+  await page.keyboard.press('Escape');
+  await expect(page).toHaveTitle(/Lintas Malam — Main Menu/);
+  await page.keyboard.press('C');
+  await expect(page).toHaveTitle(/Lintas Malam — Credits/);
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveTitle(/Lintas Malam — Main Menu/);
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveTitle(/Lintas Malam — Gameplay Prototype/);
+  await expect(status).toHaveAttribute('data-screen-shake', 'false');
+  await expect(status).toHaveAttribute('data-audio-volume', '90');
+});
+
+test('exposes state-driven gameplay HUD values and journey markers', async ({ page }) => {
+  await page.goto('/');
+  const canvas = page.locator('canvas');
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) return;
+
+  await page.mouse.click(box.x + box.width * (960 / 1920), box.y + box.height * (560 / 1080));
+  const status = page.locator('#app-status');
+  await expect(status).toHaveAttribute('data-player-hp', '100');
+  await expect(status).toHaveAttribute('data-scrap', '0');
+  await expect(status).toHaveAttribute('data-survivor-count', '0');
+  await expect(status).toHaveAttribute('data-route-markers', '33.33,62.5|91.67');
+  await expect(status).toHaveAttribute('data-progress', /\d+\.\d+/);
+  await expect(status).toHaveAttribute('data-screen-shake', 'true');
+  await expect(status).toHaveAttribute('data-audio-volume', '80');
+});
+
+test('shows contextual onboarding cues and clears each cue after the matching action', async ({ page }) => {
+  await page.goto('/');
+  const canvas = page.locator('canvas');
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) return;
+
+  await page.mouse.click(box.x + box.width * (960 / 1920), box.y + box.height * (560 / 1080));
+  const status = page.locator('#app-status');
+  await expect(status).toHaveAttribute('data-onboarding-moved', 'false');
+  await expect(status).toHaveAttribute('data-onboarding-aimed', 'false');
+  await expect(status).toHaveAttribute('data-onboarding-attacked', 'false');
+
+  await page.keyboard.down('d');
+  await page.waitForTimeout(80);
+  await page.keyboard.up('d');
+  await expect(status).toHaveAttribute('data-onboarding-moved', 'true');
+  await page.mouse.move(box.x + box.width * (1290 / 1920), box.y + box.height * (475 / 1080));
+  await expect(status).toHaveAttribute('data-onboarding-aimed', 'true');
+  await page.mouse.click(box.x + box.width * (1290 / 1920), box.y + box.height * (475 / 1080));
+  await expect(status).toHaveAttribute('data-onboarding-attacked', 'true');
+});
+
+test('records live enemy and boss damage sources for balancing audits', async ({ page }) => {
+  await page.goto('/');
+  const canvas = page.locator('canvas');
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) return;
+
+  await page.mouse.click(box.x + box.width * (960 / 1920), box.y + box.height * (560 / 1080));
+  const status = page.locator('#app-status');
+  await page.keyboard.press('F3');
+  await page.keyboard.press('7');
+  await page.keyboard.press('F4');
+  await expect.poll(async () => Number(await status.getAttribute('data-enemy-damage-to-train')), { timeout: 5000 }).toBeGreaterThan(0);
+
+  await page.keyboard.press('B');
+  await expect.poll(async () => await status.getAttribute('data-boss-intro'), { timeout: 8000 }).toBe('false');
+  await expect.poll(async () => Number(await status.getAttribute('data-boss-damage-to-player')), { timeout: 5000 }).toBeGreaterThan(0);
+});
+
 test('exposes configured route progress, biome, encounter profile, and reversible debug time scale', async ({ page }) => {
   await page.goto('/');
   const canvas = page.locator('canvas');
@@ -379,7 +505,38 @@ test('opens the M11 boss gate and freezes regular enemy spawning during the intr
   await expect(status).toHaveAttribute('data-enemies', '0');
   await expect(page).toHaveTitle(/Raksasa Alas/);
 
-  await expect.poll(async () => await status.getAttribute('data-boss-intro'), { timeout: 5000 }).toBe('false');
+  await expect.poll(async () => await status.getAttribute('data-boss-intro'), { timeout: 8000 }).toBe('false');
+});
+
+test('walks the complete deterministic route gate from a clean run to Victory', async ({ page }) => {
+  await page.goto('/');
+  const canvas = page.locator('canvas');
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) return;
+
+  await page.mouse.click(box.x + box.width * (960 / 1920), box.y + box.height * (560 / 1080));
+  const status = page.locator('#app-status');
+  await page.keyboard.press('F3');
+  await page.keyboard.press('F6');
+  await expect(status).toHaveAttribute('data-route-phase', 'BIOME_1');
+  await page.keyboard.press('F6');
+  await expect(status).toHaveAttribute('data-station-id', 'WANASARI');
+  await page.keyboard.press('F6');
+  await expect(status).toHaveAttribute('data-route-phase', 'BIOME_2');
+  await page.keyboard.press('F6');
+  await expect(status).toHaveAttribute('data-station-id', 'CIBIRU');
+  await page.keyboard.press('F6');
+  await expect(status).toHaveAttribute('data-route-phase', 'BIOME_3');
+  await page.keyboard.press('F6');
+  await expect(status).toHaveAttribute('data-boss-active', 'true');
+  await expect.poll(async () => await status.getAttribute('data-boss-intro'), { timeout: 8000 }).toBe('false');
+
+  await page.keyboard.press('C');
+  await page.keyboard.press('C');
+  await page.keyboard.press('C');
+  await expect(status).toHaveAttribute('data-result-outcome', 'VICTORY');
+  await expect(status).toHaveAttribute('data-route-phase', 'DESTINATION');
 });
 
 test('transitions from boss PURSUIT to ENRAGED and exposes the victory hook', async ({ page }) => {
@@ -394,7 +551,7 @@ test('transitions from boss PURSUIT to ENRAGED and exposes the victory hook', as
   await page.keyboard.press('F3');
   await page.keyboard.press('B');
   await expect(status).toHaveAttribute('data-boss-active', 'true');
-  await expect.poll(async () => await status.getAttribute('data-boss-intro'), { timeout: 5000 }).toBe('false');
+  await expect.poll(async () => await status.getAttribute('data-boss-intro'), { timeout: 8000 }).toBe('false');
 
   await page.keyboard.press('Escape');
   await expect(page).toHaveTitle(/Paused/);
@@ -464,4 +621,9 @@ test('shows Game Over when the locomotive reaches zero HP', async ({ page }) => 
   await expect(status).toHaveAttribute('data-result-outcome', 'GAME_OVER');
   await expect(status).toHaveAttribute('data-result-reason', 'LOCOMOTIVE_FAILED');
   await expect(page).toHaveTitle(/Game Over/);
+
+  await page.keyboard.press('R');
+  await expect(page).toHaveTitle(/Gameplay Prototype/);
+  await expect(status).toHaveAttribute('data-player-hp', '100');
+  await expect(status).toHaveAttribute('data-route-phase', 'DEPARTURE');
 });

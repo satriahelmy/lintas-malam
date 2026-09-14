@@ -15,6 +15,13 @@ describe('createInitialRunState', () => {
     expect(run.stationIds).toEqual([]);
     expect(run.survivorIds).toEqual([]);
     expect(run.upgradeIds).toEqual([]);
+    expect(run.telemetry).toMatchObject({
+      playerDamageTaken: 0,
+      trainDamageTaken: 0,
+      stationRepairs: 0,
+      stationUpgrades: 0,
+    });
+    expect(run.telemetry.upgradeChoices).toEqual([]);
     expect(run.train.map((section) => section.id)).toEqual([
       'DEFENSE',
       'WORKSHOP',
@@ -31,10 +38,12 @@ describe('createInitialRunState', () => {
     first.survivorIds.push('montir');
     first.upgradeIds.push('rapid-fire');
     first.stationIds.push('WANASARI');
+    first.telemetry.upgradeChoices.push('RAPID_FIRE');
 
     expect(second.survivorIds).toEqual([]);
     expect(second.upgradeIds).toEqual([]);
     expect(second.stationIds).toEqual([]);
+    expect(second.telemetry.upgradeChoices).toEqual([]);
   });
 });
 

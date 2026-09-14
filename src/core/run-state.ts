@@ -1,3 +1,5 @@
+import { PLAYER_BALANCE } from '../data/balance-config';
+
 export type RoutePhase = 'DEPARTURE' | 'BIOME_1' | 'STATION_1' | 'BIOME_2' | 'STATION_2' | 'BIOME_3' | 'BOSS' | 'DESTINATION';
 
 export type TrainSectionId = 'LOCOMOTIVE' | 'PASSENGER' | 'WORKSHOP' | 'DEFENSE';
@@ -17,6 +19,18 @@ export interface TrainSectionRunState {
   maxHp: number;
 }
 
+export interface RunTelemetry {
+  playerDamageTaken: number;
+  enemyDamageToPlayer: number;
+  bossDamageToPlayer: number;
+  trainDamageTaken: number;
+  enemyDamageToTrain: number;
+  bossDamageToTrain: number;
+  stationRepairs: number;
+  stationUpgrades: number;
+  upgradeChoices: string[];
+}
+
 export interface RunState {
   seed: number;
   routePhase: RoutePhase;
@@ -29,6 +43,7 @@ export interface RunState {
   stationIds: string[];
   survivorIds: string[];
   upgradeIds: string[];
+  telemetry: RunTelemetry;
   player: PlayerRunState;
   train: TrainSectionRunState[];
 }
@@ -48,13 +63,24 @@ export function createInitialRunState(seed = 1): RunState {
     stationIds: [],
     survivorIds: [],
     upgradeIds: [],
+    telemetry: {
+      playerDamageTaken: 0,
+      enemyDamageToPlayer: 0,
+      bossDamageToPlayer: 0,
+      trainDamageTaken: 0,
+      enemyDamageToTrain: 0,
+      bossDamageToTrain: 0,
+      stationRepairs: 0,
+      stationUpgrades: 0,
+      upgradeChoices: [],
+    },
     player: {
-      health: 100,
-      maxHealth: 100,
-      movementSpeed: 240,
-      damage: 10,
-      fireRate: 4,
-      weaponRange: 480,
+      health: PLAYER_BALANCE.maxHealth,
+      maxHealth: PLAYER_BALANCE.maxHealth,
+      movementSpeed: PLAYER_BALANCE.movementSpeed,
+      damage: PLAYER_BALANCE.damage,
+      fireRate: PLAYER_BALANCE.fireRate,
+      weaponRange: PLAYER_BALANCE.weaponRange,
     },
     train: [
       { id: 'DEFENSE', currentHp: INITIAL_TRAIN_HP, maxHp: INITIAL_TRAIN_HP },

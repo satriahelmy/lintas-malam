@@ -1,4 +1,5 @@
 import type { RoutePhase } from '../core/run-state';
+import { ROUTE_BALANCE_TARGETS } from './balance-config';
 import type { BiomeDefinition, EncounterProfile, EncounterProfileId, RoutePhaseDefinition } from '../entities/route/route-types';
 
 export const BIOME_DEFINITIONS: readonly BiomeDefinition[] = [
@@ -76,17 +77,17 @@ export const ENCOUNTER_PROFILES: Readonly<Record<EncounterProfileId, EncounterPr
 };
 
 export const ROUTE_PHASE_DEFINITIONS: readonly RoutePhaseDefinition[] = [
-  { phase: 'DEPARTURE', startProgress: 0, endProgress: 8.33, targetDurationSeconds: 60, encounterProfile: 'EARLY', biomeId: 'FARMLAND' },
-  { phase: 'BIOME_1', startProgress: 8.33, endProgress: 33.33, targetDurationSeconds: 180, encounterProfile: 'EARLY', biomeId: 'FARMLAND' },
-  { phase: 'STATION_1', startProgress: 33.33, endProgress: 37.5, targetDurationSeconds: 30, encounterProfile: 'EARLY', biomeId: 'FARMLAND' },
-  { phase: 'BIOME_2', startProgress: 37.5, endProgress: 62.5, targetDurationSeconds: 180, encounterProfile: 'MID', biomeId: 'PLANTATION_FOREST' },
-  { phase: 'STATION_2', startProgress: 62.5, endProgress: 66.67, targetDurationSeconds: 30, encounterProfile: 'MID', biomeId: 'PLANTATION_FOREST' },
-  { phase: 'BIOME_3', startProgress: 66.67, endProgress: 91.67, targetDurationSeconds: 180, encounterProfile: 'LATE', biomeId: 'HIGHLAND_NIGHT' },
-  { phase: 'BOSS', startProgress: 91.67, endProgress: 100, targetDurationSeconds: 120, encounterProfile: 'BOSS_PREP', biomeId: 'HIGHLAND_NIGHT' },
+  { phase: 'DEPARTURE', startProgress: 0, endProgress: 8.33, targetDurationSeconds: ROUTE_BALANCE_TARGETS.departureSeconds, encounterProfile: 'EARLY', biomeId: 'FARMLAND' },
+  { phase: 'BIOME_1', startProgress: 8.33, endProgress: 33.33, targetDurationSeconds: ROUTE_BALANCE_TARGETS.biomeSeconds, encounterProfile: 'EARLY', biomeId: 'FARMLAND' },
+  { phase: 'STATION_1', startProgress: 33.33, endProgress: 37.5, targetDurationSeconds: ROUTE_BALANCE_TARGETS.stationSeconds, encounterProfile: 'EARLY', biomeId: 'FARMLAND' },
+  { phase: 'BIOME_2', startProgress: 37.5, endProgress: 62.5, targetDurationSeconds: ROUTE_BALANCE_TARGETS.biomeSeconds, encounterProfile: 'MID', biomeId: 'PLANTATION_FOREST' },
+  { phase: 'STATION_2', startProgress: 62.5, endProgress: 66.67, targetDurationSeconds: ROUTE_BALANCE_TARGETS.stationSeconds, encounterProfile: 'MID', biomeId: 'PLANTATION_FOREST' },
+  { phase: 'BIOME_3', startProgress: 66.67, endProgress: 91.67, targetDurationSeconds: ROUTE_BALANCE_TARGETS.biomeSeconds, encounterProfile: 'LATE', biomeId: 'HIGHLAND_NIGHT' },
+  { phase: 'BOSS', startProgress: 91.67, endProgress: 100, targetDurationSeconds: ROUTE_BALANCE_TARGETS.bossSeconds, encounterProfile: 'BOSS_PREP', biomeId: 'HIGHLAND_NIGHT' },
   { phase: 'DESTINATION', startProgress: 100, endProgress: 100, targetDurationSeconds: 0, encounterProfile: 'BOSS_PREP', biomeId: 'HIGHLAND_NIGHT' },
 ];
 
-export const ROUTE_TOTAL_TARGET_SECONDS = 780;
+export const ROUTE_TOTAL_TARGET_SECONDS = ROUTE_BALANCE_TARGETS.totalSeconds;
 export const ROUTE_STATION_PROGRESS = {
   WANASARI: 33.33,
   CIBIRU: 62.5,
