@@ -856,7 +856,7 @@ Complete. The PRD prototype criteria are covered by the unit suite and determini
 
 ## M15 — Art asset integration
 
-Status: in progress. Batch 1 player art and Batch 2 train section art are generated, documented, and integrated with optional loading plus placeholder fallbacks. Enemy outputs remain reference-only until per-archetype runtime assets pass the art-direction review.
+Status: in progress. Batch 1 player art, Batch 2 train section art, and Batch 3 character/enemy masters are generated, documented, and integrated with optional loading plus placeholder fallbacks. Biome, station, FX, and UI art remain pending.
 
 ### Objective
 
@@ -867,9 +867,9 @@ Replace approved prototype visuals with a coherent modern pixel-art presentation
 - [x] M15.1 Freeze the prototype gameplay interfaces and create an asset inventory mapped to the exact render slots: player states, three enemy archetypes, boss states, four train sections, Scrap, projectile, effects, stations, biome layers, props, and UI wordmark/icons where needed. Recorded in `docs/m15-asset-inventory.md`.
 - [x] M15.2 Write an asset specification for each family before generation: function, 3/4 top-down view, scale, lighting, material, detail level, transparency, and constraints. Batch 1 specifications and prompts are recorded in `docs/m15-asset-inventory.md`.
 - [x] M15.3 Generate/prepare small batches, beginning with a master player, a train/carriage visual language, and enemy family references. Do not independently generate unrelated animation frames. Batch 1 contains one player master plus train/enemy family references.
-- [ ] M15.4 Pixel-clean, crop, scale, and transparency-clean every candidate. Reject anti-aliased, painterly, blurry, noisy, inconsistent, or perspective-mismatched assets. Player and train runtime candidates are prepared; the enemy reference still requires per-archetype cleanup/review.
+- [x] M15.4 Pixel-clean, crop, scale, and transparency-clean every candidate. Reject anti-aliased, painterly, blurry, noisy, inconsistent, or perspective-mismatched assets. Player, train, enemy, boss, and survivor masters are normalized with hard alpha and nearest-neighbor scaling.
 - [x] M15.5 Integrate the train as one coherent set: sturdy/aged regional diesel character, warm passenger windows, readable workshop, improvised defense platform, and visible condition states. All four section sprites are mapped to existing slots; condition pulse/fade remains code-driven; coordinates and gameplay data are unchanged.
-- [ ] M15.6 Integrate player, survivors, enemies, and boss with consistent pixel density, perspective, lighting, silhouette, and animation weight. Keep enemies mysterious and original rather than literal folklore copies.
+- [x] M15.6 Integrate player, survivor roster masters, three enemies, and boss with consistent pixel density, perspective, lighting, silhouette, and animation weight. Keep enemy/boss state changes code-driven and keep enemies mysterious/original rather than literal folklore copies. Every slot retains its placeholder fallback.
 - [ ] M15.7 Build biome environments from reusable modular assets and layers, not a single giant gameplay background: Farmland, Plantation & Forest, and Highland Night.
 - [ ] M15.8 Add fictional station architecture/signage and local context through vegetation, practical structures, props, and railway details. Add station text programmatically/manual; never rely on generated fake text.
 - [ ] M15.9 Apply the warm train/cool world contrast, restrained fog/mist, limited rain only if it preserves readability, and sparse foreground occlusion.

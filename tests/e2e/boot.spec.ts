@@ -52,6 +52,24 @@ test('loads all four M15.5 train section sprites without changing the train slot
   await expect(page.locator('#app-status')).toHaveAttribute('data-route-phase', 'DEPARTURE');
 });
 
+test('loads the M15.6 enemy, boss, and survivor masters with fallback diagnostics', async ({ page }) => {
+  await page.goto('/');
+  const canvas = page.locator('canvas');
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) return;
+
+  await page.mouse.click(box.x + box.width * (960 / 1920), box.y + box.height * (560 / 1080));
+  const status = page.locator('#app-status');
+  await expect(status).toHaveAttribute('data-enemy-art', 'MIST:art,SHADOW:art,KEEPER:art');
+  await expect(status).toHaveAttribute('data-boss-art', 'art-boss-idle');
+  await expect(status).toHaveAttribute(
+    'data-survivor-art',
+    'MONTIR:art,PEDAGANG:art,PERAWAT:art,PENJAGA:art',
+  );
+  await expect(status).toHaveAttribute('data-route-phase', 'DEPARTURE');
+});
+
 test('opens menu settings and credits, and carries session settings into gameplay', async ({ page }) => {
   await page.goto('/');
   const canvas = page.locator('canvas');

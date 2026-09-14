@@ -1,6 +1,6 @@
 # M15 Asset Inventory & Batch Specifications
 
-Status: M15 in progress. Batch 1 player art and Batch 2 train section art are integrated behind placeholder fallbacks. The enemy family remains reference-only pending per-archetype runtime assets. This document is the approval record for each art batch and the mapping between generated assets and existing prototype render slots.
+Status: M15 in progress. Batch 1 player art, Batch 2 train section art, and Batch 3 character/enemy masters are integrated behind placeholder fallbacks. Biome, station, FX, and UI families remain pending. This document is the approval record for each art batch and the mapping between generated assets and existing prototype render slots.
 
 ## Shared art contract
 
@@ -18,9 +18,9 @@ Status: M15 in progress. Batch 1 player art and Batch 2 train section art are in
 | --- | --- | --- | --- | --- |
 | Player | `GameplayScene.createPlayerAndAim()` marker | `characters/player/player_idle.png` | 32×48 virtual px, transparent, 3/4 top-down | Integrated in Batch 1 |
 | Player states | `updatePlayerAndAim()` position/visibility | `player_walk.png`, `player_hit.png` later derived from the approved master | Same master proportions and lighting | Deferred until master is approved |
-| Mist | `createEnemyView()` circle | `enemies/mist/mist_master.png` then walk/hit/death | 40×48 virtual px, transparent, low posture | Reference only in first batch |
-| Shadow | `createEnemyView()` diamond | `enemies/shadow/shadow_master.png` then walk/hit/death | 36×64 virtual px, transparent, elongated silhouette | Reference only in first batch |
-| Keeper / boss | Keeper rectangle and boss shape | `enemies/keeper/keeper_master.png`, `boss/boss_idle.png`, `boss/boss_hit.png` | Keeper 64×80; boss 96×112 virtual px | Reference only in first batch |
+| Mist | `createEnemyView()` circle | `enemies/mist/mist_idle.png` then walk/hit/death | 40×48 virtual px, transparent, low posture | Integrated in Batch 3; fallback retained |
+| Shadow | `createEnemyView()` diamond | `enemies/shadow/shadow_idle.png` then walk/hit/death | 36×64 virtual px, transparent, elongated silhouette | Integrated in Batch 3; fallback retained |
+| Keeper / boss | Keeper rectangle and boss shape | `enemies/keeper/keeper_idle.png`, `boss/boss_idle.png` | Keeper 64×80; boss 96×112 virtual px | Integrated in Batch 3; state FX remain code-driven |
 | Train | `drawPlaceholderWorld()` four `TRAIN_SECTION_LAYOUT` bodies | `train/locomotive.png`, `carriage_passenger.png`, `carriage_workshop.png`, `carriage_defense.png` | 160–240×64–96 virtual px each, transparent | Integrated in Batch 2 |
 | Train states | `updateTrainViews()` condition and HP overlays | condition-driven alpha pulse/fade over base art | Same section bounds; no gameplay hitbox changes | Integrated in Batch 2; damage FX remains code-native |
 | Projectile | `createProjectileView()` circle | `fx/projectile_player.png` | 8–12 virtual px, transparent | Keep code-native until icon readability pass |
@@ -28,7 +28,7 @@ Status: M15 in progress. Batch 1 player art and Batch 2 train section art are in
 | Effects | muzzle/hit/player/train feedback methods | `fx/muzzle.png`, `hit.png`, `train_sparks.png`, `mist_puff.png` | Small modular pixel clusters | Deferred to M15.9/M16 |
 | Biome layers | `drawPlaceholderWorld()` rectangles/parallax layers | `environment/biome_farmland/*`, `biome_forest/*`, `biome_highland/*` | Modular tiles/props, not one giant image | Deferred until train/player anchors pass |
 | Station | station overlay plus world layer | `environment/stations/regional_stop.png`, modular lamp/roof/bench/rail props | 3/4 top-down, transparent modules | Deferred to M15.8 |
-| Survivors | `createSurvivorRoster()` colored marker/portrait placeholder | four role-specific simple masters | 24–32×40 virtual px, transparent | Deferred until player master pass |
+| Survivors | `createSurvivorRoster()` colored marker/portrait placeholder | four role-specific simple masters under `characters/survivors/*` | 24–32×40 virtual px, transparent | Integrated in Batch 3; fallback retained |
 | UI | text and code-drawn HUD | code-native functional icons; manual wordmark if approved | Crisp UI pixels; no generated text | No image generation in first batch |
 
 ## Batch 1 specifications
@@ -112,6 +112,37 @@ All four assets below use the same operator identity and were derived from the B
 - Visual inspection confirms the four roles are distinct, share the same cool metal/ochre/amber language, and contain no readable generated text or logos.
 - The runtime does not depend on condition-specific generated variants: HP/condition overlays and the critical pulse remain code-controlled, preventing art state drift.
 
+## Batch 3 specifications — character, enemy, boss, and survivor masters
+
+All Batch 3 runtime images are optional. They share the Batch 1 player/enemy visual language and are intentionally neutral master poses; movement, hit, enrage, defeat, and condition feedback remain code-driven until a later animation/FX pass.
+
+### E1. Regular enemies
+
+- `public/assets/enemies/mist/mist_idle.png`: low horizontal vapor form, compact dark core, ragged trailing wisps, cold blue-gray palette, no readable face.
+- `public/assets/enemies/shadow/shadow_idle.png`: tall narrow elongated absence, bowed head, torn navy silhouette, one restrained cool rim highlight, no eyes.
+- `public/assets/enemies/keeper/keeper_idle.png`: heavy asymmetrical bark/root guardian, sparse moss, small dim amber core, grounded stance, no explicit face.
+- Runtime canvases use hard alpha and nearest-neighbor reduction. Display sizes are deliberately tuned per archetype so visual footprint follows existing collision roles without changing hitboxes.
+
+### E2. Boss master
+
+- `public/assets/boss/boss_idle.png`: towering Raksasa Alas master with root/bark torso, branch crown, torn shadow mantle, and a small warm ember core.
+- The enraged state is expressed by code-driven scale/alpha and the existing telegraph, so there is no random or mismatched second boss frame.
+
+### E3. Survivor roster masters
+
+- `public/assets/characters/survivors/montir/montir_idle.png`: Mang Darsa with rolled workwear, mechanic belt, and small wrench.
+- `public/assets/characters/survivors/pedagang/pedagang_idle.png`: Mbak Sari with sling bag and compact basket of everyday goods.
+- `public/assets/characters/survivors/perawat/perawat_idle.png`: Bu Nani with pale-green scarf, medical satchel, and plain bandage roll; no generated medical lettering/symbol.
+- `public/assets/characters/survivors/penjaga/penjaga_idle.png`: Pak Jaka with utility jacket, flashlight, and small radio/tool pouch; no firearm.
+- Roster labels and benefit state remain programmatic. The colored marker remains as the fallback boundary when any texture is missing.
+
+### Batch 3 review result
+
+- Generated outputs were inspected individually for silhouette, palette, accidental text, and composition.
+- Checkerboard/white/black matte backgrounds were removed deterministically; all shipped candidates have real binary alpha, transparent padding, and nearest-neighbor reduction.
+- Enemy archetypes remain visually distinct in silhouette; the boss is visibly larger and denser; survivors read as grounded human railway roles.
+- No gameplay coordinates, collision radius, damage, health, spawn rules, or progression data changed during integration.
+
 ## Generation and approval log
 
 | Asset | Prompt record | Local output | Approval | Runtime use |
@@ -123,6 +154,14 @@ All four assets below use the same operator identity and were derived from the B
 | Passenger carriage | Batch 2 prompt D2 below | `public/assets/train/carriage_passenger.png` | Runtime-approved for M15.5 | Integrated with placeholder fallback |
 | Workshop carriage | Batch 2 prompt D3 below | `public/assets/train/carriage_workshop.png` | Runtime-approved for M15.5 | Integrated with placeholder fallback |
 | Defense carriage | Batch 2 prompt D4 below | `public/assets/train/carriage_defense.png` | Runtime-approved for M15.5 | Integrated with placeholder fallback |
+| Mist | Batch 3 prompt E1 below | `public/assets/enemies/mist/mist_idle.png` | Runtime-approved for M15.6 master pass | Integrated with placeholder fallback |
+| Shadow | Batch 3 prompt E1 below | `public/assets/enemies/shadow/shadow_idle.png` | Runtime-approved for M15.6 master pass | Integrated with placeholder fallback |
+| Keeper | Batch 3 prompt E1 below | `public/assets/enemies/keeper/keeper_idle.png` | Runtime-approved for M15.6 master pass | Integrated with placeholder fallback |
+| Raksasa Alas boss | Batch 3 prompt E2 below | `public/assets/boss/boss_idle.png` | Runtime-approved for M15.6 master pass | Integrated with placeholder fallback |
+| Mang Darsa / Montir | Batch 3 prompt E3 below | `public/assets/characters/survivors/montir/montir_idle.png` | Runtime-approved for M15.6 roster master | Integrated with marker fallback |
+| Mbak Sari / Pedagang | Batch 3 prompt E3 below | `public/assets/characters/survivors/pedagang/pedagang_idle.png` | Runtime-approved for M15.6 roster master | Integrated with marker fallback |
+| Bu Nani / Perawat | Batch 3 prompt E3 below | `public/assets/characters/survivors/perawat/perawat_idle.png` | Runtime-approved for M15.6 roster master | Integrated with marker fallback |
+| Pak Jaka / Penjaga | Batch 3 prompt E3 below | `public/assets/characters/survivors/penjaga/penjaga_idle.png` | Runtime-approved for M15.6 roster master | Integrated with marker fallback |
 
 ## Batch 1 prompt records
 
@@ -212,6 +251,42 @@ Create a practical railway maintenance/workshop carriage with utility doors, roo
 ```text
 Batch 2 prompt D4 override — DEFENSE:
 Create an improvised freight/flatbed defense carriage with low practical platform, reinforced rails, stacked sandbags or maintenance crates, compact mounted utility gun silhouette, canvas, and one small warm work lamp. It must feel repairable by passengers and railway workers, not military armor or a turret fortress.
+```
+
+### Batch 3 prompt records — enemy, boss, and survivor masters
+
+The following records summarize the structured prompts used for Batch 3. Each generation used the relevant approved master/reference as `Image 1`; every output was then reviewed and normalized before shipping.
+
+```text
+Shared Batch 3 contract:
+Use case: final-game asset master for Lintas Malam V1, a desktop browser survival game.
+Asset type: one standalone transparent pixel-art sprite, not a sheet.
+Input rule: match the approved 3/4 top-down perspective, hard pixel clusters, restrained outlines, cool moonlit lighting, muted night palette, and grounded railway-world material language.
+Scene rule: genuinely transparent background with real alpha; no checkerboard, black/white matte, floor, contact shadow, UI, labels, logos, or text.
+Composition rule: centered full-body sprite, generous transparent padding, no crop, no extra objects; use a neutral master pose.
+Avoid: photorealism, vector gradients, blur, bloom, neon, noisy texture, accidental text, direct folklore costume copies, gore, and generic AI-game silhouettes.
+```
+
+```text
+Batch 3 prompt E1 — regular enemy overrides:
+MIST: low compact ambiguous vapor form with dark core and ragged blue-gray trailing wisps; no readable face or eyes.
+SHADOW: tall thin elongated navy-black absence with bowed head, torn edges, and one faint cold rim highlight; no glowing eyes.
+KEEPER: broad asymmetrical bark/root guardian with sparse moss and a tiny restrained amber core; no explicit face.
+Keep all three mysterious and original, clearly distinct in silhouette, and sized for approximately 40x48, 36x64, and 64x80 virtual-pixel roles. Do not copy the reference creatures literally.
+```
+
+```text
+Batch 3 prompt E2 — boss override:
+RAKSASA ALAS: a towering territorial jungle apparition built from dense root/bark forms, a high branch crown, torn shadow mantle, and a small warm ember core. It must read as larger and denser than regular enemies while remaining quiet and mysterious. This is the neutral master pose; the enraged state is code-driven with scale/alpha/telegraph effects.
+```
+
+```text
+Batch 3 prompt E3 — survivor overrides:
+MONTIR: Mang Darsa, rolled workwear, mechanic belt, small wrench, calm neutral pose.
+PEDAGANG: Mbak Sari, practical night-train vendor, sling bag, compact basket of everyday goods, calm neutral pose.
+PERAWAT: Bu Nani, practical nurse, pale-green scarf, compact medical satchel and plain bandage roll; no medical lettering or symbol.
+PENJAGA: Pak Jaka, sturdy railway guard, utility jacket, flashlight and small radio/tool pouch; no firearm or military tactical styling.
+All four are human-scale, grounded, facing slightly right in the same 3/4 top-down view, readable at 24–32x40 virtual pixels, with no generated text.
 ```
 
 ## Batch review checklist

@@ -6,7 +6,13 @@ import type { TrainSectionId } from '../core/run-state';
 import { SessionContext } from '../core/session-context';
 import { COLORS, DESIGN_VIEWPORT_HEIGHT, DESIGN_VIEWPORT_WIDTH } from '../game/game-config';
 import { SceneKeys } from '../game/scene-keys';
-import { OPTIONAL_IMAGE_ASSETS, TRAIN_IMAGE_ASSETS } from '../data/asset-config';
+import {
+  BOSS_IMAGE_ASSET,
+  ENEMY_IMAGE_ASSETS,
+  OPTIONAL_IMAGE_ASSETS,
+  SURVIVOR_IMAGE_ASSETS,
+  TRAIN_IMAGE_ASSETS,
+} from '../data/asset-config';
 import { getRoutePhaseDefinition } from '../data/route-config';
 import { ENEMY_SPAWN_SIDES } from '../data/enemy-config';
 import { BASE_WEAPON } from '../data/player-config';
@@ -69,11 +75,13 @@ interface ProjectileView {
 
 interface EnemyView {
   shape: Phaser.GameObjects.Shape;
+  sprite?: Phaser.GameObjects.Image;
   label: Phaser.GameObjects.Text;
 }
 
 interface BossView {
   shape: Phaser.GameObjects.Shape;
+  sprite?: Phaser.GameObjects.Image;
   label: Phaser.GameObjects.Text;
 }
 
@@ -98,6 +106,7 @@ interface StationSectionView {
 interface SurvivorView {
   id: SurvivorId;
   marker: Phaser.GameObjects.Arc;
+  sprite?: Phaser.GameObjects.Image;
   label: Phaser.GameObjects.Text;
 }
 
@@ -121,6 +130,12 @@ const ENEMY_COLORS: Record<EnemyArchetype, number> = {
   MIST: 0xb7b7ad,
   SHADOW: 0x77777c,
   KEEPER: 0x404047,
+};
+
+const ENEMY_ART_DISPLAY_SIZE: Record<EnemyArchetype, { width: number; height: number }> = {
+  MIST: { width: 64, height: 48 },
+  SHADOW: { width: 64, height: 96 },
+  KEEPER: { width: 84, height: 96 },
 };
 
 export class GameplayScene extends Phaser.Scene {
@@ -843,6 +858,12 @@ export class GameplayScene extends Phaser.Scene {
       .setDepth(4)
       .setStrokeStyle(4, 0xc36a4e, 0.95)
       .setVisible(false);
+    const sprite = this.textures.exists(BOSS_IMAGE_ASSET.key)
+      ? this.add.image(0, 0, BOSS_IMAGE_ASSET.key)
+        .setDisplaySize(144, 176)
+        .setDepth(4)
+        .setVisible(false)
+      : undefined;
     const label = this.add.text(0, 0, '', {
       color: '#eee8d5',
       fontFamily: 'Arial, Helvetica, sans-serif',
@@ -851,7 +872,7 @@ export class GameplayScene extends Phaser.Scene {
       align: 'center',
       lineSpacing: 4,
     }).setOrigin(0.5).setDepth(5).setVisible(false);
-    this.bossView = { shape, label };
+    this.bossView = { shape, sprite, label };
     this.bossTelegraph = this.add.circle(0, 0, 10, 0xf18b6f, 0.16)
       .setDepth(2)
       .setStrokeStyle(3, 0xf18b6f, 0.9)
@@ -862,13 +883,18 @@ export class GameplayScene extends Phaser.Scene {
     const state = this.bossSystem?.getState();
     if (!state) {
       this.bossView?.shape.setVisible(false);
+      this.bossView?.sprite?.setVisible(false);
       this.bossView?.label.setVisible(false);
       this.bossTelegraph?.setVisible(false);
       return;
     }
 
     const color = state.behaviorState === 'ENRAGED' ? 0x6f3036 : 0x2b242d;
-    this.bossView?.shape.setVisible(state.active).setPosition(state.x, state.y).setFillStyle(color);
+    const isEnraged = state.behaviorState === 'ENRAGED';
+    this.bossView?.shape.setVisible(state.active && !this.bossView.sprite).setPosition(state.x, state.y)
+      .setFillStyle(color).setScale(isEnraged ? 1.12 : 1);
+    this.bossView?.sprite?.setVisible(state.active).setPosition(state.x, state.y)
+      .setScale(isEnraged ? 1.12 : 1).setAlpha(isEnraged ? 0.98 : 1);
     this.bossView?.label.setVisible(state.active).setPosition(state.x, state.y - state.radius - 42)
       .setText(`${state.name}\nHP ${Math.ceil(state.health)}/${state.maxHealth}\n${state.behaviorState}`);
 
@@ -1315,6 +1341,14 @@ export class GameplayScene extends Phaser.Scene {
       shape = this.add.rectangle(enemy.x, enemy.y, enemy.radius * 1.65, enemy.radius * 2, color);
     }
     shape.setDepth(4).setStrokeStyle(2, 0xeee8d5, 0.75);
+    const asset = ENEMY_IMAGE_ASSETS[enemy.archetype];
+    const artSize = ENEMY_ART_DISPLAY_SIZE[enemy.archetype];
+    const sprite = this.textures.exists(asset.key)
+      ? this.add.image(enemy.x, enemy.y, asset.key)
+        .setDisplaySize(artSize.width, artSize.height)
+        .setDepth(4)
+      : undefined;
+    if (sprite) shape.setVisible(false);
 
     const label = this.add.text(enemy.x, enemy.y - enemy.radius - 20, '', {
       color: COLORS.text,
@@ -1323,7 +1357,7 @@ export class GameplayScene extends Phaser.Scene {
       fontStyle: 'bold',
       align: 'center',
     }).setOrigin(0.5).setDepth(5);
-    return { shape, label };
+    return { shape, sprite, label };
   }
 
   private updateEnemyViews(): void {
@@ -1335,7 +1369,9 @@ export class GameplayScene extends Phaser.Scene {
       const isHit = enemy.hitFlashUntilMs > this.elapsedMs;
       view.shape.setPosition(enemy.x, enemy.y);
       view.shape.setFillStyle(isHit ? 0xf18b6f : ENEMY_COLORS[enemy.archetype]);
+      view.shape.setVisible(!view.sprite && enemy.active);
       view.shape.setAlpha(enemy.active ? 1 : 0.5);
+      view.sprite?.setPosition(enemy.x, enemy.y).setVisible(enemy.active).setAlpha(enemy.active ? 1 : 0.5);
       view.label.setPosition(enemy.x, enemy.y - enemy.radius - 20);
       view.label.setText(`${enemy.archetype}\nHP ${Math.ceil(enemy.health)}/${enemy.maxHealth}`);
       this.enemyViews.set(enemy.id, view);
@@ -1344,6 +1380,7 @@ export class GameplayScene extends Phaser.Scene {
     for (const [id, view] of this.enemyViews) {
       if (activeIds.has(id)) continue;
       view.shape.destroy();
+      view.sprite?.destroy();
       view.label.destroy();
       this.enemyViews.delete(id);
     }
@@ -1538,7 +1575,10 @@ export class GameplayScene extends Phaser.Scene {
       const x = 118 + index * 92;
       const y = 222;
       const view = this.survivorViews.get(id) ?? this.createSurvivorView(definition);
-      view.marker.setPosition(x, y).setFillStyle(definition.portraitColor).setAlpha(modifiers.benefitMultiplier > 0 ? 1 : 0.45);
+      const alpha = modifiers.benefitMultiplier > 0 ? 1 : 0.45;
+      view.marker.setPosition(x, y).setFillStyle(definition.portraitColor)
+        .setVisible(!view.sprite).setAlpha(alpha);
+      view.sprite?.setPosition(x, y).setVisible(true).setAlpha(alpha);
       view.label.setPosition(x, y + 38).setText(`${definition.initial}\n${definition.role}`).setAlpha(modifiers.benefitMultiplier > 0 ? 1 : 0.55);
       view.marker.setVisible(true);
       view.label.setVisible(true);
@@ -1549,13 +1589,20 @@ export class GameplayScene extends Phaser.Scene {
     const marker = this.add.circle(0, 0, 18, definition.portraitColor)
       .setDepth(5)
       .setStrokeStyle(2, 0xeee8d5, 0.8);
+    const asset = SURVIVOR_IMAGE_ASSETS[definition.id];
+    const sprite = this.textures.exists(asset.key)
+      ? this.add.image(0, 0, asset.key)
+        .setDisplaySize(42, 56)
+        .setDepth(5)
+      : undefined;
+    if (sprite) marker.setVisible(false);
     const label = this.add.text(0, 0, '', {
       color: COLORS.text,
       fontFamily: 'monospace',
       fontSize: '11px',
       align: 'center',
     }).setOrigin(0.5).setDepth(5);
-    const view = { id: definition.id, marker, label };
+    const view = { id: definition.id, marker, sprite, label };
     this.survivorViews.set(definition.id, view);
     return view;
   }
@@ -2371,6 +2418,13 @@ export class GameplayScene extends Phaser.Scene {
     status.dataset.playerDamageTaken = String(telemetry?.playerDamageTaken ?? 0);
     status.dataset.playerArt = this.playerSprite ? OPTIONAL_IMAGE_ASSETS.playerIdle.key : 'placeholder-player';
     status.dataset.trainArt = this.trainViews.map((view) => `${view.sectionId}:${view.sprite ? 'art' : 'placeholder'}`).join(',');
+    status.dataset.enemyArt = (Object.entries(ENEMY_IMAGE_ASSETS) as [EnemyArchetype, { key: string }][])
+      .map(([archetype, asset]) => `${archetype}:${this.textures.exists(asset.key) ? 'art' : 'placeholder'}`)
+      .join(',');
+    status.dataset.bossArt = this.textures.exists(BOSS_IMAGE_ASSET.key) ? BOSS_IMAGE_ASSET.key : 'placeholder-boss';
+    status.dataset.survivorArt = (Object.entries(SURVIVOR_IMAGE_ASSETS) as [SurvivorId, { key: string }][])
+      .map(([id, asset]) => `${id}:${this.textures.exists(asset.key) ? 'art' : 'placeholder'}`)
+      .join(',');
     status.dataset.enemyDamageToPlayer = String(telemetry?.enemyDamageToPlayer ?? 0);
     status.dataset.bossDamageToPlayer = String(telemetry?.bossDamageToPlayer ?? 0);
     status.dataset.trainDamageTaken = String(telemetry?.trainDamageTaken ?? 0);
