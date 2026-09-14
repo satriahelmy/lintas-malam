@@ -1,0 +1,9 @@
+node_modules/
+dist/
+test-results/
+.hosting-smoke/
+playwright-report/
+.vite/
+*.tsbuildinfo
+*.local
+.DS_Store

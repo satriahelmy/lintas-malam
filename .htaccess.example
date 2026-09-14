@@ -1,0 +1,13 @@
+# Optional Apache fallback for future direct application routes.
+# V1 can run without this because the game uses one document entry point.
+# Rename to .htaccess only if the hosting provider requires history fallback.
+
+RewriteEngine On
+
+# Keep actual files and directories, including bundled assets, untouched.
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Send unknown document paths to the static game entry point.
+RewriteRule ^ index.html [L]
