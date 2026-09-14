@@ -1,6 +1,6 @@
 # Lintas Malam V1 — Implementation Task Plan
 
-Status: planning only. This document is an implementation plan; it does not authorize writing application code or generating final art yet.
+Status: active implementation plan. M1–M8 are implemented incrementally with placeholder visuals only; final art and later V1 systems remain gated by the milestone plan.
 
 ## Source of truth and V1 guardrails
 
@@ -318,15 +318,19 @@ M1.
 
 Make the train a real objective with independent section health, readable damage states, and an unambiguous locomotive failure condition.
 
+### Status
+
+Complete. The four-section train state, damage/repair rules, condition feedback, locomotive terminal event, support hooks, and stop/resume behavior are implemented and verified locally.
+
 ### Tasks
 
-- [ ] M3.1 Define typed train-section data for Locomotive, Passenger Car, Workshop Car, and Defense Car: current HP, max HP, hitbox, position, condition thresholds, and repairability.
-- [ ] M3.2 Render all four sections with distinct placeholder silhouettes and a stable layout. Keep the default order `[Defense]—[Workshop]—[Passenger]—[Locomotive]` unless camera testing justifies reversing it.
-- [ ] M3.3 Implement section-specific damage, clamping, damage events, and condition states: healthy, damaged, and critical.
-- [ ] M3.4 Make Locomotive HP reaching zero emit exactly one terminal failure event. Player HP reaching zero remains a separate terminal condition for M12.
-- [ ] M3.5 Add train stop/resume hooks so station phases can freeze travel and train-related simulation cleanly.
-- [ ] M3.6 Add interfaces for Workshop repair effectiveness and Defense Car passive attack without implementing their final bonuses yet.
-- [ ] M3.7 Add placeholder visual/audio hooks for sparks, smoke, flicker, and instability based on section condition. Keep effects minimal and temporary.
+- [x] M3.1 Define typed train-section data for Locomotive, Passenger Car, Workshop Car, and Defense Car: current HP, max HP, hitbox, position, condition thresholds, and repairability.
+- [x] M3.2 Render all four sections with distinct placeholder silhouettes and a stable layout. Keep the default order `[Defense]—[Workshop]—[Passenger]—[Locomotive]` unless camera testing justifies reversing it.
+- [x] M3.3 Implement section-specific damage, clamping, damage events, and condition states: healthy, damaged, and critical.
+- [x] M3.4 Make Locomotive HP reaching zero emit exactly one terminal failure event. Player HP reaching zero remains a separate terminal condition for M12.
+- [x] M3.5 Add train stop/resume hooks so station phases can freeze travel and train-related simulation cleanly.
+- [x] M3.6 Add interfaces for Workshop repair effectiveness and Defense Car passive attack without implementing their final bonuses yet.
+- [x] M3.7 Add placeholder visual/audio hooks for sparks, smoke, flicker, and instability based on section condition. Keep effects minimal and temporary.
 
 ### Dependencies
 
@@ -342,13 +346,13 @@ M1 and M2. M4 and M5 consume the damage and hitbox interfaces.
 
 ### Test checklist
 
-- [ ] Damage each section independently.
-- [ ] Verify HP clamps at zero and max HP.
-- [ ] Verify condition transitions at each threshold.
-- [ ] Verify critical Locomotive damage emits one failure event.
-- [ ] Verify repairing later cannot revive a terminally failed run.
-- [ ] Verify stop/resume preserves HP and section positions.
-- [ ] Verify all section hitboxes match their placeholder visuals.
+- [x] Damage each section independently.
+- [x] Verify HP clamps at zero and max HP.
+- [x] Verify condition transitions at each threshold.
+- [x] Verify critical Locomotive damage emits one failure event.
+- [x] Verify repairing later cannot revive a terminally failed run.
+- [x] Verify stop/resume preserves HP and section positions.
+- [x] Verify all section hitboxes match their placeholder visuals.
 
 ## M4 — Combat system
 
@@ -356,15 +360,19 @@ M1 and M2. M4 and M5 consume the damage and hitbox interfaces.
 
 Implement the responsive, grounded base weapon that lets the player defend the train in real time.
 
+### Status
+
+Complete. The configurable base weapon, mouse firing, projectile lifecycle, target collision, hit feedback, player damage intake, invulnerability window, and paused-state firing guard are implemented and verified locally.
+
 ### Tasks
 
-- [ ] M4.1 Define one base weapon with damage, fire rate, projectile speed, range, cooldown, and aim behavior in configuration.
-- [ ] M4.2 Bind Left Click to fire only during active gameplay, using the current aim direction and weapon cooldown.
-- [ ] M4.3 Implement a lightweight projectile lifecycle: spawn, travel, collision, range expiry, and cleanup. Use pooling if profiling shows it is needed.
-- [ ] M4.4 Implement a single damage interface shared by player projectiles, enemy attacks, and train damage.
-- [ ] M4.5 Add restrained placeholder feedback: visible projectile, brief hit flash, small impact marker, and optional short damage indication.
-- [ ] M4.6 Add player damage intake with a short invulnerability window or attack cooldown protection so contact cannot lock the player indefinitely.
-- [ ] M4.7 Block firing while paused, in Upgrade/Station screens, dead, or during a terminal result state.
+- [x] M4.1 Define one base weapon with damage, fire rate, projectile speed, range, cooldown, and aim behavior in configuration.
+- [x] M4.2 Bind Left Click to fire only during active gameplay, using the current aim direction and weapon cooldown.
+- [x] M4.3 Implement a lightweight projectile lifecycle: spawn, travel, collision, range expiry, and cleanup. Use pooling if profiling shows it is needed.
+- [x] M4.4 Implement a single damage interface shared by player projectiles, enemy attacks, and train damage.
+- [x] M4.5 Add restrained placeholder feedback: visible projectile, brief hit flash, small impact marker, and optional short damage indication.
+- [x] M4.6 Add player damage intake with a short invulnerability window or attack cooldown protection so contact cannot lock the player indefinitely.
+- [x] M4.7 Block firing while paused, in Upgrade/Station screens, dead, or during a terminal result state.
 
 ### Dependencies
 
@@ -380,14 +388,14 @@ M2 for input/aim and M3 for train damage interfaces. M5 supplies live enemy targ
 
 ### Test checklist
 
-- [ ] Fire in eight or more aim directions.
-- [ ] Verify cooldown and fire-rate changes.
-- [ ] Verify projectile collision with a target and with no target.
-- [ ] Verify projectiles expire at range and do not accumulate off-screen.
-- [ ] Verify damage is applied once per projectile hit.
-- [ ] Verify player damage and invulnerability timing.
-- [ ] Verify no shots fire during pause, upgrade, station, or results.
-- [ ] Run a basic projectile-count/performance check.
+- [x] Fire in eight or more aim directions.
+- [x] Verify cooldown and fire-rate changes.
+- [x] Verify projectile collision with a target and with no target.
+- [x] Verify projectiles expire at range and do not accumulate off-screen.
+- [x] Verify damage is applied once per projectile hit.
+- [x] Verify player damage and invulnerability timing.
+- [x] Verify no shots fire during pause, upgrade, station, or results.
+- [x] Run a basic projectile-count/performance check.
 
 ## M5 — Enemy system
 
@@ -395,17 +403,21 @@ M2 for input/aim and M3 for train damage interfaces. M5 supplies live enemy targ
 
 Add the three regular enemy archetypes with distinct silhouettes, movement, targeting, attacks, death, and cleanup behavior.
 
+### Status
+
+Complete. Mist, Shadow, and Keeper now have data-driven stats, safe side-based spawning, distinct movement profiles, stable target selection, cooldown-based attacks, hit/death/drop events, placeholder silhouettes, and an active-enemy cap.
+
 ### Tasks
 
-- [ ] M5.1 Define enemy data for The Mist, The Shadow, and The Keeper: HP, speed, damage, attack interval, target rules, drop value, size, and spawn weight.
-- [ ] M5.2 Implement an enemy lifecycle: spawn, active movement, attack cooldown, hit reaction, death event, drop event, and removal.
-- [ ] M5.3 Implement safe spawn points around the upper side, lower side, rear, and occasional front of the train. Do not spawn directly on top of the player.
-- [ ] M5.4 Implement The Mist as the common, low-HP, direct-moving threat that pressures the nearest train section.
-- [ ] M5.5 Implement The Shadow as a fast, irregular-moving threat that can prioritize the player or a weak train section.
-- [ ] M5.6 Implement The Keeper as a slow, high-HP, high-train-damage priority target with visibly heavier movement.
-- [ ] M5.7 Add targeting and retargeting rules that remain understandable and avoid enemies switching targets every frame.
-- [ ] M5.8 Add an active-enemy cap and cleanup policy to protect 60 FPS. Keep the cap in data for later balancing.
-- [ ] M5.9 Use placeholder shapes/silhouettes only; distinguish archetypes by shape and movement, not color alone.
+- [x] M5.1 Define enemy data for The Mist, The Shadow, and The Keeper: HP, speed, damage, attack interval, target rules, drop value, size, and spawn weight.
+- [x] M5.2 Implement an enemy lifecycle: spawn, active movement, attack cooldown, hit reaction, death event, drop event, and removal.
+- [x] M5.3 Implement safe spawn points around the upper side, lower side, rear, and occasional front of the train. Do not spawn directly on top of the player.
+- [x] M5.4 Implement The Mist as the common, low-HP, direct-moving threat that pressures the nearest train section.
+- [x] M5.5 Implement The Shadow as a fast, irregular-moving threat that can prioritize the player or a weak train section.
+- [x] M5.6 Implement The Keeper as a slow, high-HP, high-train-damage priority target with visibly heavier movement.
+- [x] M5.7 Add targeting and retargeting rules that remain understandable and avoid enemies switching targets every frame.
+- [x] M5.8 Add an active-enemy cap and cleanup policy to protect 60 FPS. Keep the cap in data for later balancing.
+- [x] M5.9 Use placeholder shapes/silhouettes only; distinguish archetypes by shape and movement, not color alone.
 
 ### Dependencies
 
@@ -421,14 +433,14 @@ M3 and M4. M6 consumes enemy defeat/drop events; M10 later controls composition 
 
 ### Test checklist
 
-- [ ] Spawn each archetype from each supported spawn side.
-- [ ] Verify no spawn overlaps the player or train hitboxes.
-- [ ] Verify each movement profile and target priority.
-- [ ] Verify enemy attack cooldown and damage routing.
-- [ ] Verify enemy hit reaction and one-time death event.
-- [ ] Verify enemies stop attacking while paused or in a safe station.
-- [ ] Verify active cap, off-screen cleanup, and no orphaned timers.
-- [ ] Run a grayscale screenshot/readability check with mixed archetypes.
+- [x] Spawn each archetype from each supported spawn side.
+- [x] Verify no spawn overlaps the player or train hitboxes.
+- [x] Verify each movement profile and target priority.
+- [x] Verify enemy attack cooldown and damage routing.
+- [x] Verify enemy hit reaction and one-time death event.
+- [x] Verify enemies stop attacking while paused or in a safe station.
+- [x] Verify active cap, off-screen cleanup, and no orphaned timers.
+- [x] Run a grayscale screenshot/readability check with mixed archetypes.
 
 ## M6 — Scrap and pickup system
 
@@ -436,14 +448,18 @@ M3 and M4. M6 consumes enemy defeat/drop events; M10 later controls composition 
 
 Create the run-local Scrap economy that rewards combat and supports repair, station actions, and upgrades.
 
+### Status
+
+Complete. Enemy drops now create duplicate-safe, readable Scrap pickups; pickups attract and collect within a clear radius; run-local add/spend/refund/reward APIs validate balances; HUD diagnostics expose the economy; and all economy state resets with a new run.
+
 ### Tasks
 
-- [ ] M6.1 Define Scrap drop values and drop probability per enemy, with optional encounter reward support.
-- [ ] M6.2 Spawn a visible temporary Scrap pickup from eligible enemy defeat events. Prevent duplicate drops from duplicate death events.
-- [ ] M6.3 Implement pickup detection within a clear radius. A subtle attraction/bounce may be used only if it improves readability and responsiveness.
-- [ ] M6.4 Add run-local Scrap count, total collected statistic, and spend/refund methods with non-negative validation.
-- [ ] M6.5 Add station and upgrade reward hooks without coupling the pickup object to station UI.
-- [ ] M6.6 Reset Scrap and all economy statistics when Retry starts a new run; never carry them to a later run.
+- [x] M6.1 Define Scrap drop values and drop probability per enemy, with optional encounter reward support.
+- [x] M6.2 Spawn a visible temporary Scrap pickup from eligible enemy defeat events. Prevent duplicate drops from duplicate death events.
+- [x] M6.3 Implement pickup detection within a clear radius. A subtle attraction/bounce may be used only if it improves readability and responsiveness.
+- [x] M6.4 Add run-local Scrap count, total collected statistic, and spend/refund methods with non-negative validation.
+- [x] M6.5 Add station and upgrade reward hooks without coupling the pickup object to station UI.
+- [x] M6.6 Reset Scrap and all economy statistics when Retry starts a new run; never carry them to a later run.
 
 ### Dependencies
 
@@ -459,13 +475,13 @@ M5 for defeat events and M1 for `RunState`. M7 and M8 consume the economy API.
 
 ### Test checklist
 
-- [ ] Verify drop values for each enemy archetype.
-- [ ] Verify pickup radius and collection while moving.
-- [ ] Verify a pickup cannot be collected twice.
-- [ ] Verify spending, insufficient-funds behavior, and non-negative balance.
-- [ ] Verify station reward and encounter reward paths.
-- [ ] Verify pickups stop updating in pause/station and are reset on Retry.
-- [ ] Verify pickup cleanup and entity count during a long combat sample.
+- [x] Verify drop values for each enemy archetype.
+- [x] Verify pickup radius and collection while moving.
+- [x] Verify a pickup cannot be collected twice.
+- [x] Verify spending, insufficient-funds behavior, and non-negative balance.
+- [x] Verify station reward and encounter reward paths.
+- [x] Verify pickups stop updating in pause/station and are reset on Retry.
+- [x] Verify pickup cleanup and entity count during a long combat sample.
 
 ## M7 — Upgrade system
 
@@ -473,17 +489,21 @@ M5 for defeat events and M1 for `RunState`. M7 and M8 consume the economy API.
 
 Give the player meaningful, readable, run-local build choices through a simple 1-of-3 upgrade offer without a skill tree or inventory system.
 
+### Status
+
+Complete. The six V1 upgrade definitions, max-level filtering, milestone offer director, pause-safe three-choice overlay, player/train effects, Emergency Repair, passive Defense Turret, and run-local upgrade tracking are implemented and verified locally.
+
 ### Tasks
 
-- [ ] M7.1 Define typed upgrade definitions and max levels for Rapid Fire, Heavy Round, Long Barrel, Reinforced Carriage, Emergency Repair, and Defense Turret.
-- [ ] M7.2 Implement a minimal offer director driven by configurable progress/encounter milestones, not a new XP or meta-progression system.
-- [ ] M7.3 Generate three valid, non-duplicate choices. Avoid offering maxed upgrades when alternatives exist.
-- [ ] M7.4 Pause gameplay while the offer is open and resume only after a valid selection or explicit allowed dismissal.
-- [ ] M7.5 Apply player upgrades to fire rate, damage, range, and other weapon stats.
-- [ ] M7.6 Apply Reinforced Carriage to train max HP while preserving a clear rule for current HP adjustment.
-- [ ] M7.7 Implement Emergency Repair through the shared repair API.
-- [ ] M7.8 Implement Defense Turret as a simple passive Defense Car attack, with no weapon inventory or turret customization.
-- [ ] M7.9 Display active upgrade names/levels in a compact placeholder panel and record them in the result summary if useful.
+- [x] M7.1 Define typed upgrade definitions and max levels for Rapid Fire, Heavy Round, Long Barrel, Reinforced Carriage, Emergency Repair, and Defense Turret.
+- [x] M7.2 Implement a minimal offer director driven by configurable progress/encounter milestones, not a new XP or meta-progression system.
+- [x] M7.3 Generate three valid, non-duplicate choices. Avoid offering maxed upgrades when alternatives exist.
+- [x] M7.4 Pause gameplay while the offer is open and resume only after a valid selection or explicit allowed dismissal.
+- [x] M7.5 Apply player upgrades to fire rate, damage, range, and other weapon stats.
+- [x] M7.6 Apply Reinforced Carriage to train max HP while preserving a clear rule for current HP adjustment.
+- [x] M7.7 Implement Emergency Repair through the shared repair API.
+- [x] M7.8 Implement Defense Turret as a simple passive Defense Car attack, with no weapon inventory or turret customization.
+- [x] M7.9 Display active upgrade names/levels in a compact placeholder panel and record them in the result summary if useful.
 
 ### Dependencies
 
@@ -500,15 +520,15 @@ M3, M4, and M6. M8 may reuse the catalog for station purchases.
 
 ### Test checklist
 
-- [ ] Verify three unique valid choices.
-- [ ] Verify max-level filtering and repeated offers.
-- [ ] Verify selection applies one time only.
-- [ ] Verify simulation, enemy attacks, projectiles, and timers freeze during selection.
-- [ ] Verify each weapon stat change numerically.
-- [ ] Verify Reinforced Carriage max/current HP behavior.
-- [ ] Verify Emergency Repair cannot exceed max HP.
-- [ ] Verify Defense Turret attack cadence, targeting, and cleanup.
-- [ ] Verify upgrades reset on Retry.
+- [x] Verify three unique valid choices.
+- [x] Verify max-level filtering and repeated offers.
+- [x] Verify selection applies one time only.
+- [x] Verify simulation, enemy attacks, projectiles, and timers freeze during selection.
+- [x] Verify each weapon stat change numerically.
+- [x] Verify Reinforced Carriage max/current HP behavior.
+- [x] Verify Emergency Repair cannot exceed max HP.
+- [x] Verify Defense Turret attack cadence, targeting, and cleanup.
+- [x] Verify upgrades reset on Retry.
 
 ## M8 — Station system
 
@@ -516,17 +536,21 @@ M3, M4, and M6. M8 may reuse the catalog for station purchases.
 
 Implement the two short, safe station phases where players can make repair, upgrade, and survivor decisions without breaking travel flow.
 
+### Status
+
+Complete. Wanasari and Cibiru use shared station data and a reusable safe-zone overlay with train repair, shared upgrade purchases, the M9 survivor rescue hook, and one-time departure transitions.
+
 ### Tasks
 
-- [ ] M8.1 Define reusable station data: fictional name, arrival progress, available actions, costs, visual label, and reward/rescue availability.
-- [ ] M8.2 Trigger a station transition at the end of Biome 1 and Biome 2. Slow/stop travel and show a brief arrival state.
-- [ ] M8.3 Suspend enemy spawning and enemy attacks for the entire station phase. Preserve current run state.
-- [ ] M8.4 Implement a station overlay that keeps the gameplay view visible and exposes current Scrap and train condition.
-- [ ] M8.5 Implement `Repair Train` as a clear action on a selected damaged section, using a configurable cost and the Workshop bonus.
-- [ ] M8.6 Reuse the upgrade system for a station upgrade purchase/reward without creating a second upgrade model.
-- [ ] M8.7 Add a `Rescue Survivor` action hook for M9, including availability and duplicate/roster validation.
-- [ ] M8.8 Add a `Depart` action that exits the station cleanly and resumes the next travel phase.
-- [ ] M8.9 Keep each station interaction within the intended 20–40 second flow; do not build an RPG shop or dialogue screen.
+- [x] M8.1 Define reusable station data: fictional name, arrival progress, available actions, costs, visual label, and reward/rescue availability.
+- [x] M8.2 Trigger a station transition at the end of Biome 1 and Biome 2. Slow/stop travel and show a brief arrival state.
+- [x] M8.3 Suspend enemy spawning and enemy attacks for the entire station phase. Preserve current run state.
+- [x] M8.4 Implement a station overlay that keeps the gameplay view visible and exposes current Scrap and train condition.
+- [x] M8.5 Implement `Repair Train` as a clear action on a selected damaged section, using a configurable cost and the Workshop bonus.
+- [x] M8.6 Reuse the upgrade system for a station upgrade purchase/reward without creating a second upgrade model.
+- [x] M8.7 Add a `Rescue Survivor` action hook for M9, including availability and duplicate/roster validation.
+- [x] M8.8 Add a `Depart` action that exits the station cleanly and resumes the next travel phase.
+- [x] M8.9 Keep each station interaction within the intended 20–40 second flow; do not build an RPG shop or dialogue screen.
 
 ### Dependencies
 
@@ -542,14 +566,14 @@ M3, M6, and M7. M9 supplies survivor recruitment behavior; M10 supplies exact ro
 
 ### Test checklist
 
-- [ ] Trigger a station from travel and verify arrival transition.
-- [ ] Verify enemies freeze/clear safely and cannot damage the player/train.
-- [ ] Repair each damaged section and verify costs/bonuses.
-- [ ] Verify repair cannot exceed max HP or spend negative Scrap.
-- [ ] Verify upgrade purchase and insufficient-funds state.
-- [ ] Verify survivor availability and duplicate handling.
-- [ ] Verify Depart resumes travel exactly once.
-- [ ] Verify station can be entered and exited twice in one run.
+- [x] Trigger a station from travel and verify arrival transition.
+- [x] Verify enemies freeze/clear safely and cannot damage the player/train.
+- [x] Repair each damaged section and verify costs/bonuses.
+- [x] Verify repair cannot exceed max HP or spend negative Scrap.
+- [x] Verify upgrade purchase and insufficient-funds state.
+- [x] Verify survivor availability and duplicate handling through the M9 hook contract.
+- [x] Verify Depart resumes travel exactly once.
+- [x] Verify station can be entered and exited twice in one run.
 
 ## M9 — Survivor system
 

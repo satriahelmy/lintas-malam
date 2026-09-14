@@ -1,8 +1,19 @@
 import { GameState } from './game-state';
+import { TrainSectionId } from './run-state';
+import { TrainCondition } from '../entities/train/train-types';
 
 export interface GameEventMap {
   'game-state-changed': { next: GameState; previous: GameState };
   'run-created': { seed: number };
+  'train-section-damaged': {
+    sectionId: TrainSectionId;
+    amount: number;
+    currentHp: number;
+    maxHp: number;
+    condition: TrainCondition;
+  };
+  'locomotive-failed': { sectionId: 'LOCOMOTIVE' };
+  'train-movement-changed': { moving: boolean };
 }
 
 export type GameEventName = keyof GameEventMap;

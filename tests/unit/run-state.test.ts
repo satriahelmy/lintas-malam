@@ -12,6 +12,7 @@ describe('createInitialRunState', () => {
     expect(run.routePhase).toBe('DEPARTURE');
     expect(run.progress).toBe(0);
     expect(run.scrap).toBe(0);
+    expect(run.stationIds).toEqual([]);
     expect(run.survivorIds).toEqual([]);
     expect(run.upgradeIds).toEqual([]);
     expect(run.train.map((section) => section.id)).toEqual([
@@ -29,9 +30,11 @@ describe('createInitialRunState', () => {
 
     first.survivorIds.push('montir');
     first.upgradeIds.push('rapid-fire');
+    first.stationIds.push('WANASARI');
 
     expect(second.survivorIds).toEqual([]);
     expect(second.upgradeIds).toEqual([]);
+    expect(second.stationIds).toEqual([]);
   });
 });
 
@@ -48,6 +51,8 @@ describe('SessionContext', () => {
 
     const secondRun = session.startNewRun(8);
     expect(secondRun.scrap).toBe(0);
+    expect(secondRun.scrapCollected).toBe(0);
+    expect(secondRun.scrapSpent).toBe(0);
     expect(secondRun.survivorIds).toEqual([]);
     expect(session.gameState.value).toBe('PLAYING');
   });

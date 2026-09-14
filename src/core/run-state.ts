@@ -23,8 +23,10 @@ export interface RunState {
   progress: number;
   scrap: number;
   scrapCollected: number;
+  scrapSpent: number;
   enemiesDefeated: number;
   elapsedSeconds: number;
+  stationIds: string[];
   survivorIds: string[];
   upgradeIds: string[];
   player: PlayerRunState;
@@ -40,8 +42,10 @@ export function createInitialRunState(seed = 1): RunState {
     progress: 0,
     scrap: 0,
     scrapCollected: 0,
+    scrapSpent: 0,
     enemiesDefeated: 0,
     elapsedSeconds: 0,
+    stationIds: [],
     survivorIds: [],
     upgradeIds: [],
     player: {
