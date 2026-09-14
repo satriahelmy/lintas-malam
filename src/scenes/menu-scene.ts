@@ -4,6 +4,7 @@ import { setAppStatus } from '../core/dom-status';
 import { SessionContext } from '../core/session-context';
 import { COLORS, DESIGN_VIEWPORT_HEIGHT, DESIGN_VIEWPORT_WIDTH } from '../game/game-config';
 import { SceneKeys } from '../game/scene-keys';
+import { createUiIcon as createFunctionalUiIcon, type UiIconKind, type UiIconOptions } from '../ui/ui-icons';
 
 export class MenuScene extends Phaser.Scene {
   private activePanel?: 'SETTINGS' | 'CREDITS';
@@ -16,6 +17,14 @@ export class MenuScene extends Phaser.Scene {
   private settingsVolumeDown?: Phaser.GameObjects.Text;
   private settingsVolumeUp?: Phaser.GameObjects.Text;
   private panelClose?: Phaser.GameObjects.Text;
+  private playIcon?: Phaser.GameObjects.Graphics;
+  private settingsIcon?: Phaser.GameObjects.Graphics;
+  private creditsIcon?: Phaser.GameObjects.Graphics;
+  private settingsPanelIcon?: Phaser.GameObjects.Graphics;
+  private creditsPanelIcon?: Phaser.GameObjects.Graphics;
+  private volumeDownIcon?: Phaser.GameObjects.Graphics;
+  private volumeUpIcon?: Phaser.GameObjects.Graphics;
+  private readonly uiIcons: Phaser.GameObjects.Graphics[] = [];
 
   private readonly handleEnter = (): void => {
     if (this.activePanel) {
@@ -79,6 +88,7 @@ export class MenuScene extends Phaser.Scene {
     playButton.on('pointerover', () => playButton.setColor('#f3c777'));
     playButton.on('pointerout', () => playButton.setColor('#d6a65f'));
     playButton.on('pointerdown', () => this.startRun());
+    this.playIcon = this.addUiIcon('PLAY', 835, 560, { color: 0xf3c777, depth: 1 });
 
     const settingsButton = this.add.text(DESIGN_VIEWPORT_WIDTH / 2, 640, '[ SETTINGS ]', {
       color: COLORS.mutedText,
@@ -90,6 +100,7 @@ export class MenuScene extends Phaser.Scene {
     settingsButton.on('pointerover', () => settingsButton.setColor(COLORS.text));
     settingsButton.on('pointerout', () => settingsButton.setColor(COLORS.mutedText));
     settingsButton.on('pointerdown', this.handleSettings);
+    this.settingsIcon = this.addUiIcon('SETTINGS', 835, 640, { color: 0x9ca6a0, depth: 1 });
 
     const creditsButton = this.add.text(DESIGN_VIEWPORT_WIDTH / 2, 700, '[ CREDITS ]', {
       color: COLORS.mutedText,
@@ -101,6 +112,7 @@ export class MenuScene extends Phaser.Scene {
     creditsButton.on('pointerover', () => creditsButton.setColor(COLORS.text));
     creditsButton.on('pointerout', () => creditsButton.setColor(COLORS.mutedText));
     creditsButton.on('pointerdown', this.handleCredits);
+    this.creditsIcon = this.addUiIcon('CREDITS', 835, 700, { color: 0x9ca6a0, depth: 1 });
 
     this.createPanel();
     this.updateSettingsStatus();
@@ -118,6 +130,12 @@ export class MenuScene extends Phaser.Scene {
       fontSize: '18px',
       letterSpacing: 2,
     }).setOrigin(0.5);
+  }
+
+  private addUiIcon(kind: UiIconKind, x: number, y: number, options: UiIconOptions = {}): Phaser.GameObjects.Graphics {
+    const icon = createFunctionalUiIcon(this, kind, x, y, options);
+    this.uiIcons.push(icon);
+    return icon;
   }
 
   private startRun(): void {
@@ -145,6 +163,8 @@ export class MenuScene extends Phaser.Scene {
       fontStyle: 'bold',
       letterSpacing: 4,
     }).setOrigin(0.5).setDepth(11);
+    this.settingsPanelIcon = this.addUiIcon('SETTINGS', 820, 365, { color: 0xeee8d5, depth: 12 }).setVisible(false);
+    this.creditsPanelIcon = this.addUiIcon('CREDITS', 820, 365, { color: 0xeee8d5, depth: 12 }).setVisible(false);
     this.panelCopy = this.add.text(DESIGN_VIEWPORT_WIDTH / 2, 430, '', {
       color: COLORS.mutedText,
       fontFamily: 'monospace',
@@ -169,20 +189,34 @@ export class MenuScene extends Phaser.Scene {
       fontSize: '18px',
       align: 'center',
     }).setOrigin(0.5).setDepth(11);
-    this.settingsVolumeDown = this.add.text(DESIGN_VIEWPORT_WIDTH / 2 - 160, 600, '[ − ]', {
+    this.settingsVolumeDown = this.add.text(DESIGN_VIEWPORT_WIDTH / 2 - 160, 600, '', {
       color: '#d6a65f',
       fontFamily: 'monospace',
       fontSize: '22px',
     }).setOrigin(0.5).setDepth(11);
     this.settingsVolumeDown.setInteractive({ useHandCursor: true });
     this.settingsVolumeDown.on('pointerdown', () => this.adjustVolume(-0.1));
-    this.settingsVolumeUp = this.add.text(DESIGN_VIEWPORT_WIDTH / 2 + 160, 600, '[ + ]', {
+    this.settingsVolumeUp = this.add.text(DESIGN_VIEWPORT_WIDTH / 2 + 160, 600, '', {
       color: '#d6a65f',
       fontFamily: 'monospace',
       fontSize: '22px',
     }).setOrigin(0.5).setDepth(11);
     this.settingsVolumeUp.setInteractive({ useHandCursor: true });
     this.settingsVolumeUp.on('pointerdown', () => this.adjustVolume(0.1));
+    this.volumeDownIcon = this.addUiIcon('MINUS', DESIGN_VIEWPORT_WIDTH / 2 - 160, 600, {
+      color: 0xeee8d5,
+      accentColor: 0xf3c777,
+      depth: 12,
+    });
+    this.volumeDownIcon.setInteractive({ useHandCursor: true });
+    this.volumeDownIcon.on('pointerdown', () => this.adjustVolume(-0.1));
+    this.volumeUpIcon = this.addUiIcon('PLUS', DESIGN_VIEWPORT_WIDTH / 2 + 160, 600, {
+      color: 0xeee8d5,
+      accentColor: 0xf3c777,
+      depth: 12,
+    });
+    this.volumeUpIcon.setInteractive({ useHandCursor: true });
+    this.volumeUpIcon.on('pointerdown', () => this.adjustVolume(0.1));
 
     this.panelClose = this.add.text(DESIGN_VIEWPORT_WIDTH / 2, 715, '[ BACK ]', {
       color: '#d6a65f',
@@ -212,6 +246,8 @@ export class MenuScene extends Phaser.Scene {
     this.panelShade?.setVisible(visible);
     this.panel?.setVisible(visible);
     this.panelTitle?.setVisible(visible).setText(this.activePanel ?? '');
+    this.settingsPanelIcon?.setVisible(this.activePanel === 'SETTINGS');
+    this.creditsPanelIcon?.setVisible(this.activePanel === 'CREDITS');
     this.panelCopy?.setVisible(visible).setText(this.activePanel === 'CREDITS'
       ? 'LINTAS MALAM V1\nA desktop browser survival journey by the night train team.\n\nPlaceholder credits — final contributors and asset credits will be added before release.'
       : 'SESSION SETTINGS\nThese controls apply to this browser session only.');
@@ -220,6 +256,8 @@ export class MenuScene extends Phaser.Scene {
     this.settingsVolume?.setVisible(settingsVisible);
     this.settingsVolumeDown?.setVisible(settingsVisible);
     this.settingsVolumeUp?.setVisible(settingsVisible);
+    this.volumeDownIcon?.setVisible(settingsVisible);
+    this.volumeUpIcon?.setVisible(settingsVisible);
     this.panelClose?.setVisible(visible);
     if (settingsVisible) this.updateSettingsPanel();
   }
@@ -237,6 +275,8 @@ export class MenuScene extends Phaser.Scene {
     const session = this.registry.get('session') as SessionContext | undefined;
     const status = document.querySelector<HTMLElement>('#app-status');
     if (!status || !session) return;
+    status.dataset.uiIcons = String(this.uiIcons.length);
+    status.dataset.uiIconStyle = 'railway-code-native';
     status.dataset.screenShake = String(session.settings.screenShakeEnabled);
     status.dataset.audioVolume = String(Math.round(session.settings.audioVolume * 100));
   }

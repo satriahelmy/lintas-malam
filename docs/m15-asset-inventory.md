@@ -1,6 +1,6 @@
 # M15 Asset Inventory & Batch Specifications
 
-Status: M15 in progress. Batch 1 player art, Batch 2 train section art, and Batch 3 character/enemy masters are integrated behind placeholder fallbacks. Biome, station, FX, and UI families remain pending. This document is the approval record for each art batch and the mapping between generated assets and existing prototype render slots.
+Status: M15 in progress. Batch 1 player art, Batch 2 train section art, Batch 3 character/enemy masters, Batch 4 biome strips, Batch 5 station vignettes, the M15.9 atmosphere pass, and the M15.10 code-native UI icon pass are integrated behind placeholder fallbacks. Final FX remain pending. This document is the approval record for each art batch and the mapping between generated assets and existing prototype render slots.
 
 ## Shared art contract
 
@@ -25,11 +25,11 @@ Status: M15 in progress. Batch 1 player art, Batch 2 train section art, and Batc
 | Train states | `updateTrainViews()` condition and HP overlays | condition-driven alpha pulse/fade over base art | Same section bounds; no gameplay hitbox changes | Integrated in Batch 2; damage FX remains code-native |
 | Projectile | `createProjectileView()` circle | `fx/projectile_player.png` | 8–12 virtual px, transparent | Keep code-native until icon readability pass |
 | Scrap | `createScrapView()` shape | `pickups/scrap.png` | 16–24 virtual px, transparent | Deferred; code shape remains fallback |
-| Effects | muzzle/hit/player/train feedback methods | `fx/muzzle.png`, `hit.png`, `train_sparks.png`, `mist_puff.png` | Small modular pixel clusters | Deferred to M15.9/M16 |
-| Biome layers | `drawPlaceholderWorld()` rectangles/parallax layers | `environment/biome_farmland/*`, `biome_forest/*`, `biome_highland/*` | Modular tiles/props, not one giant image | Deferred until train/player anchors pass |
-| Station | station overlay plus world layer | `environment/stations/regional_stop.png`, modular lamp/roof/bench/rail props | 3/4 top-down, transparent modules | Deferred to M15.8 |
+| Effects | muzzle/hit/player/train feedback methods | `fx/muzzle.png`, `hit.png`, `train_sparks.png`, `mist_puff.png` | Small modular pixel clusters | Atmosphere pass integrated in M15.9; combat FX remain deferred to M16 |
+| Biome layers | `drawPlaceholderWorld()` rectangles/parallax layers | `environment/biome_farmland/*`, `biome_plantation_forest/*`, `biome_highland/*` | Far/mid/foreground strips, repeated and biome-switched | Integrated in Batch 4; generic bands remain fallback |
+| Station | station overlay plus world layer | `stations/wanasari_station.png`, `stations/cibiru_station.png` | Bounded 3/4 top-down transparent vignettes with local structures, props, vegetation, platform, and rail detail | Integrated in Batch 5; programmatic names and fallback retained |
 | Survivors | `createSurvivorRoster()` colored marker/portrait placeholder | four role-specific simple masters under `characters/survivors/*` | 24–32×40 virtual px, transparent | Integrated in Batch 3; fallback retained |
-| UI | text and code-drawn HUD | code-native functional icons; manual wordmark if approved | Crisp UI pixels; no generated text | No image generation in first batch |
+| UI | text and code-drawn HUD | `src/ui/ui-icons.ts` functional code-native icon vocabulary; manual wordmark if approved | Crisp flat railway utility geometry; no generated text | Integrated in M15.10 without raster UI dependencies |
 
 ## Batch 1 specifications
 
@@ -143,6 +143,50 @@ All Batch 3 runtime images are optional. They share the Batch 1 player/enemy vis
 - Enemy archetypes remain visually distinct in silhouette; the boss is visibly larger and denser; survivors read as grounded human railway roles.
 - No gameplay coordinates, collision radius, damage, health, spawn rules, or progression data changed during integration.
 
+## Batch 4 specifications — modular biome strips
+
+Batch 4 uses one transparent kit sheet per biome as the generation record, then crops each sheet into three bounded runtime strips. The runtime never loads a full-width gameplay background: each strip is repeated as a small parallax object with a fixed count and speed.
+
+- Farmland: quiet rice fields, irrigation hints, sparse tropical homes/banana plants, distant hills, utility poles, and a restrained level-crossing foreground.
+- Plantation & Forest: orderly plantation rows, dense but readable tree line, wet ground, a small maintenance hut/bridge, bamboo and overgrown railway edge.
+- Highland Night: layered mountain ridges, exposed valley/embankment, a small maintenance structure/bridge, sparse scrub, wet rock, and compact signal/utility details.
+- All layers preserve negative space. Foreground art stays below the gameplay actors; no generated text, signage, logos, or fake markings are used.
+
+### Batch 4 runtime contract
+
+- Runtime files: `far_strip.png`, `mid_strip.png`, and `foreground_strip.png` per biome under `public/assets/environment/`.
+- Asset canvases are bounded at 768 px wide and are displayed through the existing 360/280/240 virtual-pixel parallax slots.
+- `BiomeId` selects which art group is visible. If one file is missing, only that tier falls back to its code-native color band; other tiers continue using art.
+- The world background, sky, ground, track, train, player, enemies, pickups, and telegraphs keep separate depth bands so environment art cannot obscure gameplay actors.
+
+### Batch 4 review result
+
+- Three generated kit sheets were inspected for biome identity, negative space, perspective, text absence, and cool night palette.
+- The nine runtime strips were background-cleaned to hard alpha, cropped, and reduced with nearest-neighbor scaling.
+- Alternating strip flips provide bounded repetition without adding procedural world generation or a new runtime dependency.
+- The data-driven E2E route test confirms all nine assets load and the visible biome changes remain tied to the existing route phases.
+
+## Batch 5 specifications — station architecture and local context
+
+Batch 5 uses one bounded transparent vignette per V1 station. These are overlay-scale station clusters, not full-screen backgrounds: the existing station UI, station name, actions, and state remain code-driven. Each vignette carries practical local context through architecture, lamps, vegetation, platform construction, and railway details.
+
+- Wanasari: a modest rural stop with a tiled shelter, small service room, benches, sacks, banana plants, warm hanging lamp, platform, sleepers, and rail detail.
+- Cibiru: a more isolated plantation-edge stop with a corrugated shelter, maintenance room, water tank, utility cabinet, bench, bamboo/plantation foliage, warm lamp, wet platform, track, and culvert detail.
+- Both assets preserve transparent padding and an open central area so the station overlay remains readable. Generated station names, signage, logos, labels, and fake railway markings are prohibited; station text is rendered by the existing UI code.
+
+### Batch 5 runtime contract
+
+- Runtime files: `public/assets/stations/wanasari_station.png` and `public/assets/stations/cibiru_station.png`.
+- The optional preload catalog maps station IDs to image keys. If either file is missing, the station overlay still opens with the existing code-native shade, panels, buttons, and text.
+- The station vignette is shown only while its matching station overlay is open. It sits above the shade and below the functional panels, so it cannot change combat, station, or route coordinates.
+- The source outputs were background-cleaned to hard alpha, cropped, and reduced with nearest-neighbor scaling. No generated text is used at runtime.
+
+### Batch 5 review result
+
+- Wanasari and Cibiru were inspected for silhouette, station identity, local railway context, transparent alpha, accidental text, and readability behind the station overlay.
+- The two stations are visually distinct without adding a new gameplay mechanic: Wanasari reads as the first rural stop; Cibiru reads as a wetter, more isolated plantation stop.
+- The existing data-driven station flow remains unchanged. The E2E station test confirms both station assets load and the route still opens Wanasari before Cibiru.
+
 ## Generation and approval log
 
 | Asset | Prompt record | Local output | Approval | Runtime use |
@@ -162,6 +206,14 @@ All Batch 3 runtime images are optional. They share the Batch 1 player/enemy vis
 | Mbak Sari / Pedagang | Batch 3 prompt E3 below | `public/assets/characters/survivors/pedagang/pedagang_idle.png` | Runtime-approved for M15.6 roster master | Integrated with marker fallback |
 | Bu Nani / Perawat | Batch 3 prompt E3 below | `public/assets/characters/survivors/perawat/perawat_idle.png` | Runtime-approved for M15.6 roster master | Integrated with marker fallback |
 | Pak Jaka / Penjaga | Batch 3 prompt E3 below | `public/assets/characters/survivors/penjaga/penjaga_idle.png` | Runtime-approved for M15.6 roster master | Integrated with marker fallback |
+| Farmland kit | Batch 4 prompt F1 below | `docs/m15-generated/biome_farmland_kit.png` | Reference-approved for M15.7 | Cropped into three runtime strips |
+| Plantation & Forest kit | Batch 4 prompt F1 below | `docs/m15-generated/biome_plantation_forest_kit.png` | Reference-approved for M15.7 | Cropped into three runtime strips |
+| Highland Night kit | Batch 4 prompt F1 below | `docs/m15-generated/biome_highland_kit.png` | Reference-approved for M15.7 | Cropped into three runtime strips |
+| Farmland runtime strips | Batch 4 prompt F1 below | `public/assets/environment/biome_farmland/*_strip.png` | Runtime-approved for M15.7 | Integrated with code fallback |
+| Plantation & Forest runtime strips | Batch 4 prompt F1 below | `public/assets/environment/biome_plantation_forest/*_strip.png` | Runtime-approved for M15.7 | Integrated with code fallback |
+| Highland Night runtime strips | Batch 4 prompt F1 below | `public/assets/environment/biome_highland/*_strip.png` | Runtime-approved for M15.7 | Integrated with code fallback |
+| Wanasari station vignette | Batch 5 prompt G1 below | `public/assets/stations/wanasari_station.png` | Runtime-approved for M15.8 | Integrated with station overlay fallback |
+| Cibiru station vignette | Batch 5 prompt G2 below | `public/assets/stations/cibiru_station.png` | Runtime-approved for M15.8 | Integrated with station overlay fallback |
 
 ## Batch 1 prompt records
 
@@ -287,6 +339,48 @@ PEDAGANG: Mbak Sari, practical night-train vendor, sling bag, compact basket of 
 PERAWAT: Bu Nani, practical nurse, pale-green scarf, compact medical satchel and plain bandage roll; no medical lettering or symbol.
 PENJAGA: Pak Jaka, sturdy railway guard, utility jacket, flashlight and small radio/tool pouch; no firearm or military tactical styling.
 All four are human-scale, grounded, facing slightly right in the same 3/4 top-down view, readable at 24–32x40 virtual pixels, with no generated text.
+```
+
+### Batch 4 prompt records — biome kit sheets
+
+```text
+Batch 4 prompt F1 — shared environment kit:
+Use case: final-game environment asset kit for Lintas Malam V1.
+Asset type: one transparent pixel-art modular environment kit sheet containing exactly three separated, wide, reusable horizontal strips stacked vertically: far background, midground, and foreground railway-side props.
+Input image: the approved Lintas Malam train visual-language reference as style/context reference only; do not include the train.
+Scene/backdrop: genuinely transparent background with real alpha; no checkerboard, matte, labels, text, logos, frame, or giant seamless gameplay background.
+Style: modern pixel art, hard pixel clusters, restrained outlines, limited shading, consistent virtual-pixel scale, cool nocturnal world with sparse practical warm lights.
+Composition: generous transparent gaps between strips, negative space inside each strip, no perspective mismatch, no cropped important prop, each strip suitable for repetition.
+Farmland override: rice fields, irrigation, sparse banana plants, modest houses, utility poles, distant hills, quiet rural night.
+Plantation & Forest override: orderly plantation rows, dense tree line, wet ground, maintenance hut/bridge, bamboo and overgrown railway edge, fog kept readable.
+Highland Night override: layered mountain ridges, exposed valley/embankment, maintenance structure/bridge, sparse scrub, wet rock, signal/utility details, slightly paler horizon.
+Constraints: no train, characters, enemies, dense occluding vegetation, fantasy landscape, urban skyline, giant moon, neon, heavy fog, dramatic rain, painterly gradients, photorealism, or fake text.
+```
+
+### Batch 5 prompt records — station vignettes
+
+```text
+Batch 5 prompt G1 — Wanasari station vignette:
+Use case: final-game environment asset for Lintas Malam V1, a desktop browser survival game.
+Asset type: one standalone transparent pixel-art station architecture vignette, not a background sheet.
+Input image: the approved Lintas Malam train visual-language reference is a style reference only; do not copy the train.
+Scene/backdrop: genuine transparent alpha around every object; no full rectangle, checkerboard, white/gray matte, sky, or landscape backdrop.
+Subject: WANASARI fictional rural regional station — modest red-brown tiled platform shelter, simple plaster/timber service room, two worn wooden benches, one restrained warm hanging lamp, stacked travel sacks, sparse banana and grass vegetation, platform edge with sleepers and rail detail.
+Composition: centered horizontal 3/4 top-down cluster, transparent padding, suitable for a roughly 600x260 station-overlay vignette, with the central lower area open enough for UI text.
+Lighting: cool dark teal night environment with small warm practical light; readable silhouettes and no bloom.
+Text verbatim: none. Do not generate the station name, signage lettering, logos, labels, numbers, symbols, or watermark; all readable text is programmatic.
+Avoid: giant background, dense jungle wall, urban station, luxury architecture, colonial landmark, fantasy shrine, characters, trains, vehicles, weapons, photorealism, smooth 3D render, painterly gradients, baked checkerboard, or black/white matte.
+
+Batch 5 prompt G2 — Cibiru station vignette:
+Use case: final-game environment asset for Lintas Malam V1, a desktop browser survival game.
+Asset type: one standalone transparent pixel-art station architecture vignette, not a background sheet.
+Input image: the approved Lintas Malam train visual-language reference is a style reference only; do not copy the train.
+Scene/backdrop: genuine transparent alpha around every object; no full rectangle, checkerboard, white/gray matte, sky, or landscape backdrop.
+Subject: CIBIRU fictional isolated plantation-edge railway stop — modest corrugated-metal shelter, practical maintenance room or utility cabinet, one worn bench, restrained warm hanging lamp, small water tank or signal box, sparse bamboo and plantation foliage, wet platform edge, sleepers and rail detail, and a small culvert or bridge-edge structure.
+Composition: centered horizontal 3/4 top-down cluster, transparent padding, suitable for a roughly 600x260 station-overlay vignette, with separated shapes and a relatively open center for UI text.
+Lighting: cool dark teal and blue-green damp night tones with one or two small warm practical lights; no heavy fog or bloom.
+Text verbatim: none. Do not generate the station name, signage lettering, logos, labels, numbers, symbols, or watermark; all readable text is programmatic.
+Avoid: giant background, dense jungle wall, urban station, luxury architecture, colonial landmark, fantasy shrine, characters, trains, vehicles, weapons, photorealism, smooth 3D render, painterly gradients, baked checkerboard, or black/white matte.
 ```
 
 ## Batch review checklist

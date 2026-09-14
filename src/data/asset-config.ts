@@ -57,6 +57,50 @@ export const OPTIONAL_IMAGE_ASSETS = {
     key: 'art-survivor-penjaga',
     url: 'assets/characters/survivors/penjaga/penjaga_idle.png',
   },
+  biomeFarmlandFar: {
+    key: 'art-biome-farmland-far',
+    url: 'assets/environment/biome_farmland/far_strip.png',
+  },
+  biomeFarmlandMid: {
+    key: 'art-biome-farmland-mid',
+    url: 'assets/environment/biome_farmland/mid_strip.png',
+  },
+  biomeFarmlandForeground: {
+    key: 'art-biome-farmland-foreground',
+    url: 'assets/environment/biome_farmland/foreground_strip.png',
+  },
+  biomePlantationFar: {
+    key: 'art-biome-plantation-far',
+    url: 'assets/environment/biome_plantation_forest/far_strip.png',
+  },
+  biomePlantationMid: {
+    key: 'art-biome-plantation-mid',
+    url: 'assets/environment/biome_plantation_forest/mid_strip.png',
+  },
+  biomePlantationForeground: {
+    key: 'art-biome-plantation-foreground',
+    url: 'assets/environment/biome_plantation_forest/foreground_strip.png',
+  },
+  biomeHighlandFar: {
+    key: 'art-biome-highland-far',
+    url: 'assets/environment/biome_highland/far_strip.png',
+  },
+  biomeHighlandMid: {
+    key: 'art-biome-highland-mid',
+    url: 'assets/environment/biome_highland/mid_strip.png',
+  },
+  biomeHighlandForeground: {
+    key: 'art-biome-highland-foreground',
+    url: 'assets/environment/biome_highland/foreground_strip.png',
+  },
+  stationWanasari: {
+    key: 'art-station-wanasari',
+    url: 'assets/stations/wanasari_station.png',
+  },
+  stationCibiru: {
+    key: 'art-station-cibiru',
+    url: 'assets/stations/cibiru_station.png',
+  },
 } as const satisfies Record<string, OptionalImageAsset>;
 
 export const TRAIN_IMAGE_ASSETS = {
@@ -79,4 +123,27 @@ export const SURVIVOR_IMAGE_ASSETS = {
   PEDAGANG: OPTIONAL_IMAGE_ASSETS.survivorPedagang,
   PERAWAT: OPTIONAL_IMAGE_ASSETS.survivorPerawat,
   PENJAGA: OPTIONAL_IMAGE_ASSETS.survivorPenjaga,
+} as const;
+
+export const BIOME_IMAGE_ASSETS = {
+  FARMLAND: {
+    FAR: OPTIONAL_IMAGE_ASSETS.biomeFarmlandFar,
+    MID: OPTIONAL_IMAGE_ASSETS.biomeFarmlandMid,
+    FOREGROUND: OPTIONAL_IMAGE_ASSETS.biomeFarmlandForeground,
+  },
+  PLANTATION_FOREST: {
+    FAR: OPTIONAL_IMAGE_ASSETS.biomePlantationFar,
+    MID: OPTIONAL_IMAGE_ASSETS.biomePlantationMid,
+    FOREGROUND: OPTIONAL_IMAGE_ASSETS.biomePlantationForeground,
+  },
+  HIGHLAND_NIGHT: {
+    FAR: OPTIONAL_IMAGE_ASSETS.biomeHighlandFar,
+    MID: OPTIONAL_IMAGE_ASSETS.biomeHighlandMid,
+    FOREGROUND: OPTIONAL_IMAGE_ASSETS.biomeHighlandForeground,
+  },
+} as const;
+
+export const STATION_IMAGE_ASSETS = {
+  WANASARI: OPTIONAL_IMAGE_ASSETS.stationWanasari,
+  CIBIRU: OPTIONAL_IMAGE_ASSETS.stationCibiru,
 } as const;

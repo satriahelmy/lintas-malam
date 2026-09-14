@@ -8,8 +8,10 @@ import { COLORS, DESIGN_VIEWPORT_HEIGHT, DESIGN_VIEWPORT_WIDTH } from '../game/g
 import { SceneKeys } from '../game/scene-keys';
 import {
   BOSS_IMAGE_ASSET,
+  BIOME_IMAGE_ASSETS,
   ENEMY_IMAGE_ASSETS,
   OPTIONAL_IMAGE_ASSETS,
+  STATION_IMAGE_ASSETS,
   SURVIVOR_IMAGE_ASSETS,
   TRAIN_IMAGE_ASSETS,
 } from '../data/asset-config';
@@ -41,13 +43,20 @@ import { StationSystem } from '../systems/station-system';
 import { SurvivorSystem } from '../systems/survivor-system';
 import { RouteSystem } from '../systems/route-system';
 import { ResultSystem } from '../systems/result-system';
+import { createUiIcon as createFunctionalUiIcon, type UiIconKind, type UiIconOptions } from '../ui/ui-icons';
 
 interface ParallaxLayer {
   objects: Phaser.GameObjects.Rectangle[];
+  artObjects: Phaser.GameObjects.Image[];
+  biomeId?: BiomeId;
+  tier: ParallaxTier;
   speed: number;
   segmentWidth: number;
   totalWidth: number;
 }
+
+const PARALLAX_TIERS = ['FAR', 'MID', 'FOREGROUND'] as const;
+type ParallaxTier = typeof PARALLAX_TIERS[number];
 
 function formatRunDuration(seconds: number): string {
   const totalSeconds = Math.max(0, Math.floor(seconds));
@@ -138,6 +147,42 @@ const ENEMY_ART_DISPLAY_SIZE: Record<EnemyArchetype, { width: number; height: nu
   KEEPER: { width: 84, height: 96 },
 };
 
+interface AtmosphereProfile {
+  coolWashColor: number;
+  coolWashAlpha: number;
+  mistAlpha: number;
+  mistSpeed: number;
+  rainCount: number;
+  rainAlpha: number;
+}
+
+const ATMOSPHERE_PROFILES: Readonly<Record<BiomeId, AtmosphereProfile>> = {
+  FARMLAND: {
+    coolWashColor: 0x0a2028,
+    coolWashAlpha: 0.08,
+    mistAlpha: 0.035,
+    mistSpeed: 10,
+    rainCount: 4,
+    rainAlpha: 0.12,
+  },
+  PLANTATION_FOREST: {
+    coolWashColor: 0x0a1b24,
+    coolWashAlpha: 0.1,
+    mistAlpha: 0.055,
+    mistSpeed: 14,
+    rainCount: 9,
+    rainAlpha: 0.16,
+  },
+  HIGHLAND_NIGHT: {
+    coolWashColor: 0x0b1725,
+    coolWashAlpha: 0.09,
+    mistAlpha: 0.045,
+    mistSpeed: 8,
+    rainCount: 5,
+    rainAlpha: 0.13,
+  },
+};
+
 export class GameplayScene extends Phaser.Scene {
   private debugEnabled = false;
   private debugOverlay?: Phaser.GameObjects.Graphics;
@@ -163,8 +208,15 @@ export class GameplayScene extends Phaser.Scene {
   private readonly journeyMarkerLabels: Phaser.GameObjects.Text[] = [];
   private scrapHudText?: Phaser.GameObjects.Text;
   private upgradeShade?: Phaser.GameObjects.Rectangle;
+  private upgradeIcon?: Phaser.GameObjects.Graphics;
   private upgradeTitle?: Phaser.GameObjects.Text;
   private stationShade?: Phaser.GameObjects.Rectangle;
+  private stationArt?: Phaser.GameObjects.Image;
+  private stationIcon?: Phaser.GameObjects.Graphics;
+  private stationUpgradeIcon?: Phaser.GameObjects.Graphics;
+  private stationRepairIcon?: Phaser.GameObjects.Graphics;
+  private stationRescueIcon?: Phaser.GameObjects.Graphics;
+  private stationDepartIcon?: Phaser.GameObjects.Graphics;
   private stationTitle?: Phaser.GameObjects.Text;
   private stationInfo?: Phaser.GameObjects.Text;
   private stationMessage?: Phaser.GameObjects.Text;
@@ -172,6 +224,7 @@ export class GameplayScene extends Phaser.Scene {
   private stationRescueButton?: Phaser.GameObjects.Text;
   private stationDepartButton?: Phaser.GameObjects.Text;
   private survivorRosterTitle?: Phaser.GameObjects.Text;
+  private pauseIcon?: Phaser.GameObjects.Graphics;
   private bossView?: BossView;
   private bossTelegraph?: Phaser.GameObjects.Arc;
   private bossIntroShade?: Phaser.GameObjects.Rectangle;
@@ -184,9 +237,18 @@ export class GameplayScene extends Phaser.Scene {
   private resultStats?: Phaser.GameObjects.Text;
   private resultRetryButton?: Phaser.GameObjects.Text;
   private resultMenuButton?: Phaser.GameObjects.Text;
+  private resultIcon?: Phaser.GameObjects.Graphics;
+  private resultRetryIcon?: Phaser.GameObjects.Graphics;
+  private resultMenuIcon?: Phaser.GameObjects.Graphics;
   private worldBackground?: Phaser.GameObjects.Rectangle;
   private worldSky?: Phaser.GameObjects.Rectangle;
   private worldGround?: Phaser.GameObjects.Rectangle;
+  private atmosphereCoolWash?: Phaser.GameObjects.Rectangle;
+  private atmosphereMist?: Phaser.GameObjects.Graphics;
+  private atmosphereRain?: Phaser.GameObjects.Graphics;
+  private trainWarmth?: Phaser.GameObjects.Graphics;
+  private foregroundOcclusion?: Phaser.GameObjects.Graphics;
+  private atmosphereTimeMs = 0;
   private playerPosition: { x: number; y: number } = { ...PLAYER_START_POSITION };
   private pointerPosition: { x: number; y: number } = { x: PLAYER_START_POSITION.x + 160, y: PLAYER_START_POSITION.y };
   private readonly combatTargets: CombatTarget[] = [];
@@ -196,6 +258,7 @@ export class GameplayScene extends Phaser.Scene {
   private readonly upgradeCards: UpgradeCardView[] = [];
   private readonly stationSectionViews: StationSectionView[] = [];
   private readonly survivorViews = new Map<SurvivorId, SurvivorView>();
+  private readonly uiIcons: Phaser.GameObjects.Graphics[] = [];
   private combatSystem?: CombatSystem;
   private enemySystem?: EnemySystem;
   private scrapSystem?: ScrapSystem;
@@ -517,6 +580,7 @@ export class GameplayScene extends Phaser.Scene {
     this.stationSectionViews.length = 0;
     this.scrapHudText = undefined;
     this.hudGraphics = undefined;
+    this.uiIcons.length = 0;
     this.playerHudText = undefined;
     this.trainHudText = undefined;
     this.journeyHudText = undefined;
@@ -537,10 +601,27 @@ export class GameplayScene extends Phaser.Scene {
     this.resultStats = undefined;
     this.resultRetryButton = undefined;
     this.resultMenuButton = undefined;
+    this.resultIcon = undefined;
+    this.resultRetryIcon = undefined;
+    this.resultMenuIcon = undefined;
     this.worldBackground = undefined;
     this.worldSky = undefined;
     this.worldGround = undefined;
+    this.atmosphereCoolWash = undefined;
+    this.atmosphereMist = undefined;
+    this.atmosphereRain = undefined;
+    this.trainWarmth = undefined;
+    this.foregroundOcclusion = undefined;
+    this.atmosphereTimeMs = 0;
     this.playerSprite = undefined;
+    this.stationArt = undefined;
+    this.stationIcon = undefined;
+    this.stationUpgradeIcon = undefined;
+    this.stationRepairIcon = undefined;
+    this.stationRescueIcon = undefined;
+    this.stationDepartIcon = undefined;
+    this.upgradeIcon = undefined;
+    this.pauseIcon = undefined;
     this.enemySpawnElapsedMs = 0;
     this.enemySpawnSideIndex = 0;
     this.activeUpgradeOffer = [];
@@ -671,6 +752,7 @@ export class GameplayScene extends Phaser.Scene {
     this.updateSurvivorRecovery(deltaSeconds);
     this.updateSurvivorRoster();
     this.updateParallax(deltaSeconds);
+    this.updateAtmosphere(deltaSeconds);
     this.updateOnboarding();
     if (session.gameState.value === 'PLAYING') {
       this.maybeOpenStation();
@@ -680,12 +762,21 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private drawPlaceholderWorld(): void {
-    this.worldBackground = this.add.rectangle(0, 0, DESIGN_VIEWPORT_WIDTH, DESIGN_VIEWPORT_HEIGHT, COLORS.world).setOrigin(0);
-    this.worldSky = this.add.rectangle(0, 120, DESIGN_VIEWPORT_WIDTH, 250, COLORS.worldMid).setOrigin(0);
-    this.worldGround = this.add.rectangle(0, 760, DESIGN_VIEWPORT_WIDTH, 320, COLORS.worldLight).setOrigin(0);
-    this.createParallaxLayer(225, 80, 0x1a3033, 12, 360, 7);
-    this.createParallaxLayer(360, 120, 0x27443f, 22, 280, 8);
-    this.createParallaxLayer(810, 150, 0x345049, 34, 240, 9);
+    this.worldBackground = this.add.rectangle(0, 0, DESIGN_VIEWPORT_WIDTH, DESIGN_VIEWPORT_HEIGHT, COLORS.world)
+      .setOrigin(0).setDepth(-5);
+    this.worldSky = this.add.rectangle(0, 120, DESIGN_VIEWPORT_WIDTH, 250, COLORS.worldMid)
+      .setOrigin(0).setDepth(-4);
+    this.worldGround = this.add.rectangle(0, 760, DESIGN_VIEWPORT_WIDTH, 320, COLORS.worldLight)
+      .setOrigin(0).setDepth(-3);
+    this.createParallaxLayer('FAR', 225, 80, 0x1a3033, 12, 360, 7);
+    this.createParallaxLayer('MID', 360, 120, 0x27443f, 22, 280, 8);
+    this.createParallaxLayer('FOREGROUND', 810, 150, 0x345049, 34, 240, 9);
+    for (const biomeId of Object.keys(BIOME_IMAGE_ASSETS) as BiomeId[]) {
+      this.createBiomeParallaxLayer(biomeId, 'FAR', BIOME_IMAGE_ASSETS[biomeId].FAR, 225, 80, 12, 360, 7);
+      this.createBiomeParallaxLayer(biomeId, 'MID', BIOME_IMAGE_ASSETS[biomeId].MID, 360, 120, 22, 280, 8);
+      this.createBiomeParallaxLayer(biomeId, 'FOREGROUND', BIOME_IMAGE_ASSETS[biomeId].FOREGROUND, 810, 150, 34, 240, 9);
+    }
+    this.createAtmosphereLayers();
 
     const trackY = 680;
     this.add.rectangle(260, trackY, 1400, 6, 0x4e5b57).setOrigin(0.5);
@@ -722,6 +813,87 @@ export class GameplayScene extends Phaser.Scene {
     this.updateHud();
   }
 
+  private createAtmosphereLayers(): void {
+    this.atmosphereCoolWash = this.add.rectangle(0, 0, DESIGN_VIEWPORT_WIDTH, DESIGN_VIEWPORT_HEIGHT, 0x0a2028, 0.08)
+      .setOrigin(0)
+      .setDepth(0.5);
+    this.trainWarmth = this.add.graphics().setDepth(0.6);
+    this.atmosphereMist = this.add.graphics().setDepth(0.7);
+    this.atmosphereRain = this.add.graphics().setDepth(2);
+    this.foregroundOcclusion = this.add.graphics().setDepth(2);
+    this.drawForegroundOcclusion();
+    this.updateAtmosphere(0);
+  }
+
+  private drawForegroundOcclusion(): void {
+    if (!this.foregroundOcclusion) return;
+    this.foregroundOcclusion.clear();
+    this.foregroundOcclusion.fillStyle(0x071820, 0.72);
+    this.foregroundOcclusion.fillRect(0, 1045, 245, 35);
+    this.foregroundOcclusion.fillRect(DESIGN_VIEWPORT_WIDTH - 245, 1045, 245, 35);
+    for (const blade of [
+      { x: 32, y: 930, width: 22 },
+      { x: 78, y: 895, width: 26 },
+      { x: 128, y: 945, width: 20 },
+      { x: 184, y: 910, width: 24 },
+      { x: 1736, y: 915, width: 24 },
+      { x: 1792, y: 950, width: 20 },
+      { x: 1842, y: 895, width: 26 },
+      { x: 1888, y: 930, width: 22 },
+    ]) {
+      this.foregroundOcclusion.fillTriangle(
+        blade.x - blade.width,
+        1080,
+        blade.x,
+        blade.y,
+        blade.x + blade.width,
+        1080,
+      );
+    }
+  }
+
+  private updateAtmosphere(deltaSeconds: number): void {
+    const session = this.registry.get('session') as SessionContext | undefined;
+    const run = session?.run;
+    const biomeId = run && this.routeSystem?.getBiome(run).id;
+    const profile = ATMOSPHERE_PROFILES[biomeId ?? this.currentBiomeId ?? 'FARMLAND'];
+    this.atmosphereTimeMs += Math.max(0, deltaSeconds) * 1000;
+
+    this.atmosphereCoolWash?.setFillStyle(profile.coolWashColor).setAlpha(profile.coolWashAlpha);
+    this.updateTrainWarmth();
+
+    if (this.atmosphereMist) {
+      this.atmosphereMist.clear();
+      this.atmosphereMist.fillStyle(0x9bb1ad, profile.mistAlpha);
+      for (let index = 0; index < 4; index += 1) {
+        const x = ((index * 480 + this.atmosphereTimeMs * profile.mistSpeed * 0.04) % 2300) - 180;
+        const y = 330 + index * 135 + Math.sin(this.atmosphereTimeMs / 1700 + index) * 18;
+        this.atmosphereMist.fillEllipse(x, y, 260 + index * 24, 32 + (index % 2) * 10);
+      }
+    }
+
+    if (this.atmosphereRain) {
+      this.atmosphereRain.clear();
+      this.atmosphereRain.lineStyle(1, 0x9ab8b7, profile.rainAlpha);
+      for (let index = 0; index < profile.rainCount; index += 1) {
+        const x = ((index * 233 + this.atmosphereTimeMs * 0.08) % (DESIGN_VIEWPORT_WIDTH + 80)) - 40;
+        const y = 240 + ((index * 127 + this.atmosphereTimeMs * 0.18) % 570);
+        this.atmosphereRain.lineBetween(x, y, x + 5, y + 14);
+      }
+    }
+  }
+
+  private updateTrainWarmth(): void {
+    if (!this.trainWarmth) return;
+    this.trainWarmth.clear();
+    this.trainWarmth.fillStyle(0xd6a65f, 0.045);
+    this.trainWarmth.fillEllipse(1044, 608, 330, 165);
+    this.trainWarmth.fillEllipse(1306, 596, 250, 145);
+    this.trainWarmth.fillStyle(0xf3c777, 0.055);
+    this.trainWarmth.fillEllipse(1044, 610, 200, 100);
+    this.trainWarmth.fillEllipse(1306, 598, 145, 86);
+  }
+
   private updateBiomePresentation(): void {
     const session = this.registry.get('session') as SessionContext | undefined;
     const run = session?.run;
@@ -731,28 +903,64 @@ export class GameplayScene extends Phaser.Scene {
     this.worldBackground?.setFillStyle(biome.worldColor);
     this.worldSky?.setFillStyle(biome.skyColor);
     this.worldGround?.setFillStyle(biome.groundColor);
-    for (let index = 0; index < this.parallaxLayers.length; index += 1) {
-      const color = biome.parallaxColors[index];
-      if (color === undefined) continue;
-      for (const object of this.parallaxLayers[index].objects) object.setFillStyle(color);
+    this.atmosphereCoolWash?.setFillStyle(ATMOSPHERE_PROFILES[biome.id].coolWashColor)
+      .setAlpha(ATMOSPHERE_PROFILES[biome.id].coolWashAlpha);
+    for (const layer of this.parallaxLayers) {
+      if (layer.biomeId) {
+        const isCurrentBiome = layer.biomeId === biome.id;
+        for (const object of layer.artObjects) object.setVisible(isCurrentBiome);
+        continue;
+      }
+      const color = biome.parallaxColors[PARALLAX_TIERS.indexOf(layer.tier)];
+      for (const object of layer.objects) object.setFillStyle(color);
+      const currentArtLayer = this.parallaxLayers.find((candidate) => candidate.biomeId === biome.id && candidate.tier === layer.tier);
+      for (const object of layer.objects) object.setVisible(!currentArtLayer || currentArtLayer.artObjects.length === 0);
     }
     this.currentBiomeId = biome.id;
   }
 
-  private createParallaxLayer(y: number, height: number, color: number, speed: number, segmentWidth: number, count: number): void {
+  private createParallaxLayer(tier: ParallaxTier, y: number, height: number, color: number, speed: number, segmentWidth: number, count: number): void {
     const objects: Phaser.GameObjects.Rectangle[] = [];
     for (let index = 0; index < count; index += 1) {
       const object = this.add.rectangle(index * segmentWidth + segmentWidth / 2, y, segmentWidth - 8, height, color)
         .setOrigin(0.5)
-        .setDepth(-1);
+        .setDepth(this.getParallaxDepth(tier));
       objects.push(object);
     }
-    this.parallaxLayers.push({ objects, speed, segmentWidth, totalWidth: segmentWidth * count });
+    this.parallaxLayers.push({ objects, artObjects: [], tier, speed, segmentWidth, totalWidth: segmentWidth * count });
+  }
+
+  private createBiomeParallaxLayer(
+    biomeId: BiomeId,
+    tier: ParallaxTier,
+    asset: { key: string },
+    y: number,
+    height: number,
+    speed: number,
+    segmentWidth: number,
+    count: number,
+  ): void {
+    if (!this.textures.exists(asset.key)) return;
+    const artObjects: Phaser.GameObjects.Image[] = [];
+    for (let index = 0; index < count; index += 1) {
+      const object = this.add.image(index * segmentWidth + segmentWidth / 2, y, asset.key)
+        .setDisplaySize(segmentWidth, height)
+        .setOrigin(0.5)
+        .setDepth(this.getParallaxDepth(tier))
+        .setVisible(false);
+      if (index % 2 === 1) object.setFlipX(true);
+      artObjects.push(object);
+    }
+    this.parallaxLayers.push({ objects: [], artObjects, biomeId, tier, speed, segmentWidth, totalWidth: segmentWidth * count });
+  }
+
+  private getParallaxDepth(tier: ParallaxTier): number {
+    return tier === 'FAR' ? -2 : tier === 'MID' ? -1 : 0;
   }
 
   private updateParallax(deltaSeconds: number): void {
     for (const layer of this.parallaxLayers) {
-      for (const object of layer.objects) {
+      for (const object of [...layer.objects, ...layer.artObjects]) {
         object.x -= layer.speed * deltaSeconds;
         if (object.x < -layer.segmentWidth / 2) object.x += layer.totalWidth;
       }
@@ -1027,6 +1235,11 @@ export class GameplayScene extends Phaser.Scene {
       .setDepth(31)
       .setStrokeStyle(2, 0x4e5b57, 0.95)
       .setVisible(false);
+    this.resultIcon = this.addUiIcon('TRAIN', DESIGN_VIEWPORT_WIDTH / 2, 270, {
+      color: 0xeee8d5,
+      accentColor: 0xf3c777,
+      depth: 32,
+    }).setVisible(false);
     this.resultTitle = this.add.text(DESIGN_VIEWPORT_WIDTH / 2, 345, '', {
       color: COLORS.text,
       fontFamily: 'Georgia, Times New Roman, serif',
@@ -1060,6 +1273,16 @@ export class GameplayScene extends Phaser.Scene {
       fontSize: '26px',
       fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(32).setVisible(false).setInteractive({ useHandCursor: true });
+    this.resultRetryIcon = this.addUiIcon('RETRY', 710, 800, {
+      color: 0xf3c777,
+      accentColor: 0xfff0c8,
+      depth: 32,
+    }).setVisible(false);
+    this.resultMenuIcon = this.addUiIcon('MENU', 990, 800, {
+      color: 0x9ca6a0,
+      accentColor: 0xeee8d5,
+      depth: 32,
+    }).setVisible(false);
 
     this.resultRetryButton.on('pointerover', () => this.resultRetryButton?.setColor('#fff0c8'));
     this.resultRetryButton.on('pointerout', () => this.resultRetryButton?.setColor('#f3c777'));
@@ -1079,6 +1302,9 @@ export class GameplayScene extends Phaser.Scene {
     this.resultStats?.setVisible(visible);
     this.resultRetryButton?.setVisible(visible);
     this.resultMenuButton?.setVisible(visible);
+    this.resultIcon?.setVisible(visible);
+    this.resultRetryIcon?.setVisible(visible);
+    this.resultMenuIcon?.setVisible(visible);
     if (!result) return;
 
     const victory = result.outcome === 'VICTORY';
@@ -1140,11 +1366,15 @@ export class GameplayScene extends Phaser.Scene {
     this.bossIntroTitle?.setVisible(false);
     this.bossIntroInfo?.setVisible(false);
     this.pauseShade?.setVisible(false);
+    this.pauseIcon?.setVisible(false);
     this.pauseText?.setVisible(false);
     this.activeUpgradeOffer = [];
     this.activeStation = undefined;
     this.stationUpgradeMode = false;
     if (result.outcome === 'VICTORY') {
+      this.atmosphereCoolWash?.setVisible(false);
+      this.atmosphereMist?.setVisible(false);
+      this.atmosphereRain?.setVisible(false);
       this.worldSky?.setFillStyle(0x536d68);
       this.worldGround?.setFillStyle(0x7e8067);
       setAppStatus('Victory — Destination', 'gameplay');
@@ -1471,6 +1701,12 @@ export class GameplayScene extends Phaser.Scene {
     object.destroy();
   }
 
+  private addUiIcon(kind: UiIconKind, x: number, y: number, options: UiIconOptions = {}): Phaser.GameObjects.Graphics {
+    const icon = createFunctionalUiIcon(this, kind, x, y, options);
+    this.uiIcons.push(icon);
+    return icon;
+  }
+
   private createGameplayHud(): void {
     const textStyle = {
       color: COLORS.text,
@@ -1478,6 +1714,12 @@ export class GameplayScene extends Phaser.Scene {
       fontSize: '18px',
     };
     this.hudGraphics = this.add.graphics().setDepth(8);
+    this.addUiIcon('PLAYER', 52, 46, { color: 0xb7d1b4 });
+    this.addUiIcon('TRAIN', 52, 84, { color: 0xb7d1b4 });
+    this.addUiIcon('JOURNEY', 1552, 46, { color: 0xf3c777 });
+    this.addUiIcon('SCRAP', 52, 976, { color: 0xeee8d5, accentColor: 0xf3c777 });
+    this.addUiIcon('SURVIVOR', 286, 976, { color: 0xb7d1b4 });
+    this.addUiIcon('WEAPON', 636, 976, { color: 0x9ca6a0, accentColor: 0xf3c777 });
     this.playerHudText = this.add.text(96, 32, '', textStyle).setDepth(8);
     this.trainHudText = this.add.text(96, 70, '', { ...textStyle, color: '#b7d1b4' }).setDepth(8);
     this.journeyHudText = this.add.text(DESIGN_VIEWPORT_WIDTH - 96, 32, '', {
@@ -1760,6 +2002,11 @@ export class GameplayScene extends Phaser.Scene {
       .setDepth(30)
       .setInteractive()
       .setVisible(false);
+    this.upgradeIcon = this.addUiIcon('UPGRADE', DESIGN_VIEWPORT_WIDTH / 2, 190, {
+      color: 0xeee8d5,
+      accentColor: 0xf3c777,
+      depth: 31,
+    }).setVisible(false);
     this.upgradeTitle = this.add.text(DESIGN_VIEWPORT_WIDTH / 2, 250, 'CHOOSE ONE UPGRADE', {
       color: COLORS.text,
       fontFamily: 'Arial, Helvetica, sans-serif',
@@ -1811,6 +2058,7 @@ export class GameplayScene extends Phaser.Scene {
   private updateUpgradeOverlay(): void {
     const visible = this.activeUpgradeOffer.length === 3;
     this.upgradeShade?.setVisible(visible);
+    this.upgradeIcon?.setVisible(visible);
     this.upgradeTitle?.setText(this.stationUpgradeMode ? 'STATION UPGRADE — SCRAP REQUIRED' : 'CHOOSE ONE UPGRADE');
     this.upgradeTitle?.setVisible(visible);
     const help = this.children.getByName('upgrade-help') as Phaser.GameObjects.Text | null;
@@ -1837,6 +2085,40 @@ export class GameplayScene extends Phaser.Scene {
       .setDepth(20)
       .setInteractive()
       .setVisible(false);
+    const firstAvailableStationAsset = Object.values(STATION_IMAGE_ASSETS)
+      .find((asset) => this.textures.exists(asset.key));
+    if (firstAvailableStationAsset) {
+      this.stationArt = this.add.image(DESIGN_VIEWPORT_WIDTH / 2, 120, firstAvailableStationAsset.key)
+        .setDisplaySize(900, 390)
+        .setAlpha(0.9)
+        .setDepth(20.5)
+        .setVisible(false);
+    }
+    this.stationIcon = this.addUiIcon('STATION', DESIGN_VIEWPORT_WIDTH / 2, 270, {
+      color: 0xeee8d5,
+      accentColor: 0xf3c777,
+      depth: 21,
+    }).setVisible(false);
+    this.stationUpgradeIcon = this.addUiIcon('UPGRADE', 565, 770, {
+      color: 0xeee8d5,
+      accentColor: 0xf3c777,
+      depth: 22,
+    }).setVisible(false);
+    this.stationRepairIcon = this.addUiIcon('REPAIR', 1245, 340, {
+      color: 0xeee8d5,
+      accentColor: 0xf3c777,
+      depth: 22,
+    }).setVisible(false);
+    this.stationRescueIcon = this.addUiIcon('RESCUE', 1040, 770, {
+      color: 0xeee8d5,
+      accentColor: 0xb7d1b4,
+      depth: 22,
+    }).setVisible(false);
+    this.stationDepartIcon = this.addUiIcon('DEPART', 1585, 930, {
+      color: 0xeee8d5,
+      accentColor: 0xf3c777,
+      depth: 22,
+    }).setVisible(false);
     this.stationTitle = this.add.text(DESIGN_VIEWPORT_WIDTH / 2, 170, '', {
       color: COLORS.text,
       fontFamily: 'Arial, Helvetica, sans-serif',
@@ -1913,6 +2195,12 @@ export class GameplayScene extends Phaser.Scene {
     const run = session?.run;
     const visible = Boolean(run && this.activeStation && this.isStationOpen());
     this.stationShade?.setVisible(visible);
+    this.stationArt?.setVisible(false);
+    this.stationIcon?.setVisible(visible);
+    this.stationUpgradeIcon?.setVisible(visible);
+    this.stationRepairIcon?.setVisible(visible);
+    this.stationRescueIcon?.setVisible(visible);
+    this.stationDepartIcon?.setVisible(visible);
     this.stationTitle?.setVisible(visible);
     this.stationInfo?.setVisible(visible);
     this.stationMessage?.setVisible(visible && Boolean(this.stationMessage?.text));
@@ -1928,6 +2216,14 @@ export class GameplayScene extends Phaser.Scene {
       return;
     }
 
+    const stationAsset = STATION_IMAGE_ASSETS[this.activeStation.id];
+    if (this.stationArt && this.textures.exists(stationAsset.key)) {
+      this.stationArt
+        .setTexture(stationAsset.key)
+        .setPosition(DESIGN_VIEWPORT_WIDTH / 2, 120)
+        .setDisplaySize(900, 390)
+        .setVisible(true);
+    }
     this.stationTitle?.setText(this.activeStation.name);
     this.stationInfo?.setText(`SCRAP  ${run.scrap}     SELECTED SECTION  ${this.stationSelectedSection}`);
     const upgradeCost = this.getStationUpgradeCost(run);
@@ -1957,6 +2253,8 @@ export class GameplayScene extends Phaser.Scene {
       view.action.setText(quote.canRepair ? `REPAIR  ${quote.cost} SCRAP` : section.currentHp >= section.maxHp ? 'FULL' : 'UNAVAILABLE');
       view.action.setColor(quote.canRepair && run.scrap >= quote.cost ? '#f3c777' : '#7c7770');
     }
+    const selectedView = this.stationSectionViews.find((view) => view.sectionId === this.stationSelectedSection);
+    this.stationRepairIcon?.setPosition(1245, selectedView?.panel.y ?? 340);
   }
 
   private openStation(id: StationId): void {
@@ -2268,6 +2566,11 @@ export class GameplayScene extends Phaser.Scene {
       .setOrigin(0)
       .setDepth(20)
       .setVisible(false);
+    this.pauseIcon = this.addUiIcon('PAUSE', 850, DESIGN_VIEWPORT_HEIGHT / 2 - 40, {
+      color: 0xeee8d5,
+      accentColor: 0xf3c777,
+      depth: 21,
+    }).setVisible(false);
     this.pauseText = this.add.text(DESIGN_VIEWPORT_WIDTH / 2, DESIGN_VIEWPORT_HEIGHT / 2, 'PAUSED\n\nESC  RESUME     M  MENU', {
       color: COLORS.text,
       fontFamily: 'Arial, Helvetica, sans-serif',
@@ -2425,6 +2728,22 @@ export class GameplayScene extends Phaser.Scene {
     status.dataset.survivorArt = (Object.entries(SURVIVOR_IMAGE_ASSETS) as [SurvivorId, { key: string }][])
       .map(([id, asset]) => `${id}:${this.textures.exists(asset.key) ? 'art' : 'placeholder'}`)
       .join(',');
+    status.dataset.stationArt = (Object.entries(STATION_IMAGE_ASSETS) as [StationId, { key: string }][])
+      .map(([id, asset]) => `${id}:${this.textures.exists(asset.key) ? 'art' : 'placeholder'}`)
+      .join(',');
+    status.dataset.uiIcons = String(this.uiIcons.length);
+    status.dataset.uiIconStyle = 'railway-code-native';
+    status.dataset.biomeArt = (Object.entries(BIOME_IMAGE_ASSETS) as [BiomeId, Record<ParallaxTier, { key: string }>] [])
+      .map(([id, layers]) => `${id}:${PARALLAX_TIERS.map((tier) => this.textures.exists(layers[tier].key) ? 'art' : 'placeholder').join(',')}`)
+      .join('|');
+    const route = session?.run && this.routeSystem;
+    const atmosphereBiomeId = this.currentBiomeId ?? (route && session?.run ? route.getBiome(session.run).id : '');
+    const atmosphereProfile = atmosphereBiomeId ? ATMOSPHERE_PROFILES[atmosphereBiomeId] : undefined;
+    status.dataset.atmosphereBiome = atmosphereBiomeId;
+    status.dataset.weatherMist = this.atmosphereMist ? 'localized' : 'none';
+    status.dataset.weatherRainCount = String(atmosphereProfile?.rainCount ?? 0);
+    status.dataset.warmTrainLight = this.trainWarmth ? 'active' : 'fallback';
+    status.dataset.foregroundOcclusion = this.foregroundOcclusion ? 'edge-only' : 'none';
     status.dataset.enemyDamageToPlayer = String(telemetry?.enemyDamageToPlayer ?? 0);
     status.dataset.bossDamageToPlayer = String(telemetry?.bossDamageToPlayer ?? 0);
     status.dataset.trainDamageTaken = String(telemetry?.trainDamageTaken ?? 0);
@@ -2433,7 +2752,6 @@ export class GameplayScene extends Phaser.Scene {
     status.dataset.stationRepairs = String(telemetry?.stationRepairs ?? 0);
     status.dataset.stationUpgrades = String(telemetry?.stationUpgrades ?? 0);
     status.dataset.upgradeChoices = telemetry?.upgradeChoices.join(',') ?? '';
-    const route = session?.run && this.routeSystem;
     if (route && session?.run) {
       const markers = route.getMarkers(session.run);
       status.dataset.progress = markers.progress.toFixed(2);
@@ -2466,12 +2784,14 @@ export class GameplayScene extends Phaser.Scene {
       this.trainSystem?.stop();
       setAppStatus('Paused', 'gameplay');
       this.pauseShade?.setVisible(true);
+      this.pauseIcon?.setVisible(true);
       this.pauseText?.setVisible(true);
     } else if (session.gameState.value === 'PAUSED') {
       session.gameState.transition(this.pausedFromState);
       this.trainSystem?.resume();
       setAppStatus(this.pausedFromState === 'BOSS' ? 'Raksasa Alas — Boss Encounter' : 'Gameplay Prototype', 'gameplay');
       this.pauseShade?.setVisible(false);
+      this.pauseIcon?.setVisible(false);
       this.pauseText?.setVisible(false);
     }
   }

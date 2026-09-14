@@ -20,6 +20,22 @@ test('starts a run from the main menu', async ({ page }) => {
   await expect(page).toHaveTitle(/Lintas Malam — Gameplay Prototype/);
 });
 
+test('uses the shared railway utility icon language across menu and gameplay HUD', async ({ page }) => {
+  await page.goto('/');
+  const status = page.locator('#app-status');
+  await expect(status).toHaveAttribute('data-ui-icon-style', 'railway-code-native');
+  await expect(status).toHaveAttribute('data-ui-icons', '7');
+
+  const canvas = page.locator('canvas');
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) return;
+
+  await page.mouse.click(box.x + box.width * (960 / 1920), box.y + box.height * (560 / 1080));
+  await expect(status).toHaveAttribute('data-ui-icon-style', 'railway-code-native');
+  await expect(status).toHaveAttribute('data-ui-icons', '16');
+});
+
 test('loads the M15 player master while keeping the fallback boundary observable', async ({ page }) => {
   const consoleErrors: string[] = [];
   page.on('console', (message) => {
@@ -68,6 +84,83 @@ test('loads the M15.6 enemy, boss, and survivor masters with fallback diagnostic
     'MONTIR:art,PEDAGANG:art,PERAWAT:art,PENJAGA:art',
   );
   await expect(status).toHaveAttribute('data-route-phase', 'DEPARTURE');
+});
+
+test('loads reusable M15.7 biome strips and keeps biome switching data-driven', async ({ page }) => {
+  await page.goto('/');
+  const canvas = page.locator('canvas');
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) return;
+
+  await page.mouse.click(box.x + box.width * (960 / 1920), box.y + box.height * (560 / 1080));
+  const status = page.locator('#app-status');
+  await expect(status).toHaveAttribute(
+    'data-biome-art',
+    'FARMLAND:art,art,art|PLANTATION_FOREST:art,art,art|HIGHLAND_NIGHT:art,art,art',
+  );
+  await expect(status).toHaveAttribute('data-biome', 'FARMLAND');
+
+  await page.keyboard.press('F3');
+  await page.keyboard.press('F6');
+  await expect(status).toHaveAttribute('data-biome', 'FARMLAND');
+  await page.keyboard.press('F6');
+  await expect(status).toHaveAttribute('data-biome', 'FARMLAND');
+  await page.keyboard.press('F6');
+  await expect(status).toHaveAttribute('data-biome', 'PLANTATION_FOREST');
+  await page.keyboard.press('F6');
+  await expect(status).toHaveAttribute('data-biome', 'PLANTATION_FOREST');
+  await page.keyboard.press('F6');
+  await expect(status).toHaveAttribute('data-biome', 'HIGHLAND_NIGHT');
+});
+
+test('loads M15.8 station vignettes while keeping names and station flow data-driven', async ({ page }) => {
+  await page.goto('/');
+  const canvas = page.locator('canvas');
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) return;
+
+  await page.mouse.click(box.x + box.width * (960 / 1920), box.y + box.height * (560 / 1080));
+  const status = page.locator('#app-status');
+  await expect(status).toHaveAttribute('data-station-art', 'WANASARI:art,CIBIRU:art');
+
+  await page.keyboard.press('F3');
+  await page.keyboard.press('0');
+  await expect(status).toHaveAttribute('data-station-id', 'WANASARI');
+  await expect(status).toHaveAttribute('data-station-open', 'true');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('0');
+  await expect(status).toHaveAttribute('data-station-id', 'CIBIRU');
+  await expect(status).toHaveAttribute('data-station-open', 'true');
+});
+
+test('applies M15.9 restrained atmosphere and keeps the train warmth readable', async ({ page }) => {
+  await page.goto('/');
+  const canvas = page.locator('canvas');
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) return;
+
+  await page.mouse.click(box.x + box.width * (960 / 1920), box.y + box.height * (560 / 1080));
+  const status = page.locator('#app-status');
+  await expect(status).toHaveAttribute('data-atmosphere-biome', 'FARMLAND');
+  await expect(status).toHaveAttribute('data-weather-mist', 'localized');
+  await expect(status).toHaveAttribute('data-weather-rain-count', '4');
+  await expect(status).toHaveAttribute('data-warm-train-light', 'active');
+  await expect(status).toHaveAttribute('data-foreground-occlusion', 'edge-only');
+
+  await page.keyboard.press('F3');
+  await page.keyboard.press('F6');
+  await page.keyboard.press('F6');
+  await page.keyboard.press('F6');
+  await expect(status).toHaveAttribute('data-atmosphere-biome', 'PLANTATION_FOREST');
+  await expect(status).toHaveAttribute('data-weather-rain-count', '9');
+
+  await page.keyboard.press('F6');
+  await page.keyboard.press('F6');
+  await expect(status).toHaveAttribute('data-atmosphere-biome', 'HIGHLAND_NIGHT');
+  await expect(status).toHaveAttribute('data-weather-rain-count', '5');
 });
 
 test('opens menu settings and credits, and carries session settings into gameplay', async ({ page }) => {

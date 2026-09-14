@@ -856,7 +856,7 @@ Complete. The PRD prototype criteria are covered by the unit suite and determini
 
 ## M15 — Art asset integration
 
-Status: in progress. Batch 1 player art, Batch 2 train section art, and Batch 3 character/enemy masters are generated, documented, and integrated with optional loading plus placeholder fallbacks. Biome, station, FX, and UI art remain pending.
+Status: in progress. Batch 1 player art, Batch 2 train section art, Batch 3 character/enemy masters, Batch 4 biome strips, and Batch 5 station vignettes are generated, documented, and integrated with optional loading plus placeholder fallbacks. FX and UI art remain pending.
 
 ### Objective
 
@@ -870,10 +870,10 @@ Replace approved prototype visuals with a coherent modern pixel-art presentation
 - [x] M15.4 Pixel-clean, crop, scale, and transparency-clean every candidate. Reject anti-aliased, painterly, blurry, noisy, inconsistent, or perspective-mismatched assets. Player, train, enemy, boss, and survivor masters are normalized with hard alpha and nearest-neighbor scaling.
 - [x] M15.5 Integrate the train as one coherent set: sturdy/aged regional diesel character, warm passenger windows, readable workshop, improvised defense platform, and visible condition states. All four section sprites are mapped to existing slots; condition pulse/fade remains code-driven; coordinates and gameplay data are unchanged.
 - [x] M15.6 Integrate player, survivor roster masters, three enemies, and boss with consistent pixel density, perspective, lighting, silhouette, and animation weight. Keep enemy/boss state changes code-driven and keep enemies mysterious/original rather than literal folklore copies. Every slot retains its placeholder fallback.
-- [ ] M15.7 Build biome environments from reusable modular assets and layers, not a single giant gameplay background: Farmland, Plantation & Forest, and Highland Night.
-- [ ] M15.8 Add fictional station architecture/signage and local context through vegetation, practical structures, props, and railway details. Add station text programmatically/manual; never rely on generated fake text.
-- [ ] M15.9 Apply the warm train/cool world contrast, restrained fog/mist, limited rain only if it preserves readability, and sparse foreground occlusion.
-- [ ] M15.10 Replace placeholder icons with one consistent functional icon style. Keep the UI industrial/railway utility, flat, restrained, and readable.
+- [x] M15.7 Build biome environments from reusable modular assets and layers, not a single giant gameplay background: Farmland, Plantation & Forest, and Highland Night. Each biome now has far, mid, and foreground strips repeated through the existing parallax system; generic code bands remain as per-layer fallbacks.
+- [x] M15.8 Add fictional station architecture/signage and local context through vegetation, practical structures, props, and railway details. Add station text programmatically/manual; never rely on generated fake text. Wanasari and Cibiru now use bounded transparent station vignettes with code-rendered names and UI, while the existing station flow and placeholder fallback remain intact.
+- [x] M15.9 Apply the warm train/cool world contrast, restrained fog/mist, limited rain only if it preserves readability, and sparse foreground occlusion. Added a cool environment wash below gameplay actors, code-native warm pools under the train, localized mist, biome-specific low-density rain, and edge-only foreground silhouettes.
+- [x] M15.10 Replace placeholder icons with one consistent functional icon style. Keep the UI industrial/railway utility, flat, restrained, and readable. Added a reusable code-native icon module for gameplay HUD, menu, station, upgrade, pause, result, and volume controls without adding raster UI dependencies.
 - [ ] M15.11 Integrate final assets incrementally with placeholder fallbacks so one bad asset cannot block the game or corrupt unrelated gameplay.
 
 ### Dependencies
@@ -900,6 +900,38 @@ M14 prototype gate. `art-direction.md — Lintas Malam.md` must be consulted for
 - [ ] Verify foreground elements never hide player, enemy, projectile, Scrap, or danger telegraph.
 - [ ] Verify asset loading has fallbacks and no missing-texture console errors.
 - [ ] Re-run performance profile after final textures and effects are loaded.
+
+### M15.7 completion notes
+
+- [x] Generate one modular kit sheet per biome and preserve each sheet in `docs/m15-generated/` for review.
+- [x] Normalize nine runtime strips under `public/assets/environment/` with real alpha and nearest-neighbor scaling.
+- [x] Register biome assets in the optional preload catalog and switch visibility from `BiomeId` without changing route, train, or combat coordinates.
+- [x] Repeat strips with bounded object counts and alternating horizontal flips; do not use a single giant gameplay background.
+- [x] Verify all three biome asset families through the data-driven route transition E2E test.
+
+### M15.8 completion notes
+
+- [x] Generate and inspect one station vignette for Wanasari and one for Cibiru using the approved train visual language as a style reference only.
+- [x] Remove baked checkerboard/black matte backgrounds, crop the subjects, reduce with nearest-neighbor scaling, and validate real alpha before shipping.
+- [x] Register station assets in the optional preload catalog and select the active vignette from the existing `StationId` without changing route or station data.
+- [x] Keep station names, signage, actions, prices, and survivor text programmatic; generated images contain no readable text or logos.
+- [x] Place the vignette behind functional station panels with a missing-texture fallback, then verify both station stops through the M15.8 browser test.
+
+### M15.9 completion notes
+
+- [x] Add a low-alpha cool wash beneath the train/player/enemy gameplay depth so the existing world remains dark teal without tinting the warm train sprites.
+- [x] Add restrained code-native warm light pools below the passenger and locomotive sections; no bloom or omnidirectional neon was introduced.
+- [x] Add four localized mist pockets and biome-specific rain counts: Farmland 4, Plantation & Forest 9, Highland Night 5. Streaks stay thin and low-opacity.
+- [x] Add sparse foreground silhouettes only along the lower left/right screen edges, below HUD and outside the train combat envelope.
+- [x] Expose atmosphere diagnostics and verify biome-specific presentation through the M15.9 browser test without changing route, combat, collision, or balance systems.
+
+### M15.10 completion notes
+
+- [x] Add `src/ui/ui-icons.ts` as the single functional icon vocabulary: player, train, journey, Scrap, survivor, weapon, station, repair, upgrade, rescue, depart, play, settings, credits, pause, retry, menu, plus, and minus.
+- [x] Place icons beside the gameplay HUD readouts and journey rail, keeping text labels as the accessible/readable source of truth.
+- [x] Add matching icons to menu actions, settings volume controls, station actions, upgrade selection, pause, and result actions.
+- [x] Keep icons flat, geometric, low-contrast enough for hierarchy, and code-native so the static PHP-hosted build has no additional image requests.
+- [x] Add diagnostics and a browser test confirming one shared `railway-code-native` icon style is present in menu and gameplay.
 
 ## M16 — Audio and polish
 
