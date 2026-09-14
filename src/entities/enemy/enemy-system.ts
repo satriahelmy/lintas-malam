@@ -7,6 +7,7 @@ import type {
   EnemySpawnSide,
   EnemyState,
   EnemySystemEvent,
+  EnemyTuning,
   EnemyTarget,
   EnemyTargetContext,
   EnemyTargetSnapshot,
@@ -31,10 +32,37 @@ export class EnemySystem {
   private nextEnemyId = 1;
   private spawnSequence = 0;
 
+  private tuning: EnemyTuning = {
+    activeCap: ENEMY_ACTIVE_CAP,
+    spawnWeights: Object.fromEntries(Object.values(ENEMY_CONFIGS).map((config) => [config.archetype, config.spawnWeight])) as Record<EnemyArchetype, number>,
+    healthMultiplier: 1,
+    damageMultiplier: 1,
+    speedMultiplier: 1,
+    attackIntervalMultiplier: 1,
+    dropMultiplier: 1,
+  };
+
   public constructor(
     private readonly configs: Readonly<Record<EnemyArchetype, EnemyConfig>> = ENEMY_CONFIGS,
-    private readonly activeCap = ENEMY_ACTIVE_CAP,
+    private readonly defaultActiveCap = ENEMY_ACTIVE_CAP,
   ) {}
+
+  public setTuning(tuning: EnemyTuning): void {
+    this.tuning = {
+      ...tuning,
+      activeCap: Math.max(1, Math.floor(tuning.activeCap)),
+      spawnWeights: { ...tuning.spawnWeights },
+      healthMultiplier: Math.max(0.1, tuning.healthMultiplier),
+      damageMultiplier: Math.max(0, tuning.damageMultiplier),
+      speedMultiplier: Math.max(0.1, tuning.speedMultiplier),
+      attackIntervalMultiplier: Math.max(0.1, tuning.attackIntervalMultiplier),
+      dropMultiplier: Math.max(0, tuning.dropMultiplier),
+    };
+  }
+
+  public getActiveCap(): number {
+    return this.tuning.activeCap || this.defaultActiveCap;
+  }
 
   public getActiveEnemies(): readonly EnemyState[] {
     return [...this.enemies.values()];
@@ -66,7 +94,7 @@ export class EnemySystem {
     context: EnemyTargetContext,
     requestedPosition?: Point,
   ): EnemyState | null {
-    if (this.enemies.size >= this.activeCap) return null;
+    if (this.enemies.size >= this.getActiveCap()) return null;
 
     const config = this.configs[archetype];
     const position = requestedPosition ?? this.getSpawnPosition(side);
@@ -78,15 +106,15 @@ export class EnemySystem {
       y: position.y,
       radius: config.size,
       health: config.maxHealth,
-      maxHealth: config.maxHealth,
+      maxHealth: Math.max(1, config.maxHealth * this.tuning.healthMultiplier),
       active: true,
       archetype,
       spawnSide: side,
-      speed: config.speed,
-      damage: config.damage,
-      attackIntervalMs: config.attackIntervalMs,
+      speed: config.speed * this.tuning.speedMultiplier,
+      damage: config.damage * this.tuning.damageMultiplier,
+      attackIntervalMs: config.attackIntervalMs * this.tuning.attackIntervalMultiplier,
       attackRange: config.attackRange,
-      dropValue: config.dropValue,
+      dropValue: Math.max(0, Math.floor(config.dropValue * this.tuning.dropMultiplier)),
       movementProfile: config.movementProfile,
       targetRule: config.targetRule,
       retargetIntervalMs: config.retargetIntervalMs,
@@ -110,12 +138,12 @@ export class EnemySystem {
     randomValue = Math.random(),
   ): EnemyState | null {
     const entries = Object.values(this.configs);
-    const totalWeight = entries.reduce((sum, config) => sum + Math.max(0, config.spawnWeight), 0);
+    const totalWeight = entries.reduce((sum, config) => sum + Math.max(0, this.tuning.spawnWeights[config.archetype] ?? config.spawnWeight), 0);
     if (totalWeight <= 0) return null;
 
     let cursor = Math.max(0, Math.min(0.999999, randomValue)) * totalWeight;
     for (const config of entries) {
-      cursor -= Math.max(0, config.spawnWeight);
+      cursor -= Math.max(0, this.tuning.spawnWeights[config.archetype] ?? config.spawnWeight);
       if (cursor < 0) return this.spawn(config.archetype, side, nowMs, context);
     }
     return this.spawn(entries[entries.length - 1].archetype, side, nowMs, context);
@@ -200,6 +228,16 @@ export class EnemySystem {
     this.enemies.clear();
     this.nextEnemyId = 1;
     this.spawnSequence = 0;
+    this.tuning = {
+      ...this.tuning,
+      activeCap: this.defaultActiveCap,
+      spawnWeights: Object.fromEntries(Object.values(this.configs).map((config) => [config.archetype, config.spawnWeight])) as Record<EnemyArchetype, number>,
+      healthMultiplier: 1,
+      damageMultiplier: 1,
+      speedMultiplier: 1,
+      attackIntervalMultiplier: 1,
+      dropMultiplier: 1,
+    };
   }
 
   private selectTarget(enemy: EnemyState, context: EnemyTargetContext): void {

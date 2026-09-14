@@ -1,5 +1,6 @@
 import type { RunState, TrainSectionId } from '../core/run-state';
 import { STATION_BY_ID, STATION_DEFINITIONS } from '../data/station-config';
+import { getRoutePhaseDefinition } from '../data/route-config';
 import type { StationDefinition, StationId, StationRepairQuote } from '../entities/station/station-types';
 
 export class StationSystem {
@@ -19,7 +20,9 @@ export class StationSystem {
   }
 
   public markDeparted(run: RunState, id: StationId): void {
-    run.routePhase = this.getDefinition(id).nextRoutePhase;
+    const nextRoutePhase = this.getDefinition(id).nextRoutePhase;
+    run.routePhase = nextRoutePhase;
+    run.progress = Math.max(run.progress, getRoutePhaseDefinition(nextRoutePhase).startProgress);
   }
 
   public getRepairQuote(run: RunState, sectionId: TrainSectionId, id: StationId): StationRepairQuote {

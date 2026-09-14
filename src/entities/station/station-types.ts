@@ -1,4 +1,5 @@
 import type { RoutePhase, TrainSectionId, RunState } from '../../core/run-state';
+import type { SurvivorId } from '../survivor/survivor-types';
 
 export type StationId = 'WANASARI' | 'CIBIRU';
 
@@ -11,6 +12,7 @@ export interface StationDefinition {
   repairAmount: number;
   upgradeCost: number;
   canRescueSurvivor: boolean;
+  rescueOptions: readonly SurvivorId[];
 }
 
 export interface StationRepairQuote {

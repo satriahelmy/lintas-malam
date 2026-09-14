@@ -20,6 +20,31 @@ test('starts a run from the main menu', async ({ page }) => {
   await expect(page).toHaveTitle(/Lintas Malam — Gameplay Prototype/);
 });
 
+test('exposes configured route progress, biome, encounter profile, and reversible debug time scale', async ({ page }) => {
+  await page.goto('/');
+  const canvas = page.locator('canvas');
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) return;
+
+  await page.mouse.click(box.x + box.width * (960 / 1920), box.y + box.height * (560 / 1080));
+  await expect(page).toHaveTitle(/Lintas Malam — Gameplay Prototype/);
+  const status = page.locator('#app-status');
+  const progressBefore = Number(await status.getAttribute('data-progress'));
+
+  await expect(status).toHaveAttribute('data-biome', 'FARMLAND');
+  await expect(status).toHaveAttribute('data-encounter-profile', 'EARLY');
+  await expect(status).toHaveAttribute('data-route-markers', '33.33,62.5|91.67');
+  await page.waitForTimeout(180);
+  expect(Number(await status.getAttribute('data-progress'))).toBeGreaterThan(progressBefore);
+
+  await page.keyboard.press('F3');
+  await page.keyboard.press('F4');
+  await expect(status).toHaveAttribute('data-debug-time-scale', '4');
+  await page.keyboard.press('F4');
+  await expect(status).toHaveAttribute('data-debug-time-scale', '1');
+});
+
 test('shows the desktop resolution notice below the supported minimum', async ({ browser }) => {
   const page = await browser.newPage({ viewport: { width: 1024, height: 600 } });
   await page.goto('/');
@@ -148,6 +173,7 @@ test('collects a Scrap pickup exactly once', async ({ page }) => {
 
   await page.mouse.click(box.x + box.width * (960 / 1920), box.y + box.height * (560 / 1080));
   const status = page.locator('#app-status');
+  await expect(page).toHaveTitle(/Lintas Malam — Gameplay Prototype/);
   await page.keyboard.press('F3');
   await page.keyboard.press('8');
 
@@ -275,7 +301,7 @@ test('uses exactly two station stops in route order', async ({ page }) => {
   await expect(status).toHaveAttribute('data-station-visited', 'WANASARI,CIBIRU');
 });
 
-test('exposes the station survivor rescue hook without changing the roster yet', async ({ page }) => {
+test('rescues a survivor at the station and exposes the run-local roster', async ({ page }) => {
   await page.goto('/');
   const canvas = page.locator('canvas');
   const box = await canvas.boundingBox();
@@ -284,6 +310,7 @@ test('exposes the station survivor rescue hook without changing the roster yet',
 
   await page.mouse.click(box.x + box.width * (960 / 1920), box.y + box.height * (560 / 1080));
   const status = page.locator('#app-status');
+  await expect(page).toHaveTitle(/Lintas Malam — Gameplay Prototype/);
   await page.keyboard.press('F3');
   await page.keyboard.press('0');
   await page.keyboard.press('N');
@@ -291,6 +318,11 @@ test('exposes the station survivor rescue hook without changing the roster yet',
   await expect(status).toHaveAttribute('data-station-open', 'true');
   await expect(status).toHaveAttribute('data-survivor-hook', 'true');
   await expect(status).toHaveAttribute('data-station-visited', 'WANASARI');
+  await expect(status).toHaveAttribute('data-survivor-ids', 'MONTIR');
+  await expect(status).toHaveAttribute('data-survivor-count', '1');
+
+  await page.keyboard.press('N');
+  await expect(status).toHaveAttribute('data-survivor-ids', 'MONTIR');
 });
 
 test('repairs a station section and purchases a shared upgrade with Scrap', async ({ page }) => {
@@ -325,4 +357,111 @@ test('repairs a station section and purchases a shared upgrade with Scrap', asyn
   await expect(status).toHaveAttribute('data-station-upgrade-mode', 'false');
   await expect(status).toHaveAttribute('data-scrap', '0');
   await expect.poll(async () => (await status.getAttribute('data-upgrade-ids'))?.length ?? 0).toBeGreaterThan(0);
+});
+
+test('opens the M11 boss gate and freezes regular enemy spawning during the intro', async ({ page }) => {
+  await page.goto('/');
+  const canvas = page.locator('canvas');
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) return;
+
+  await page.mouse.click(box.x + box.width * (960 / 1920), box.y + box.height * (560 / 1080));
+  const status = page.locator('#app-status');
+  await page.keyboard.press('F3');
+  await page.keyboard.press('B');
+
+  await expect(status).toHaveAttribute('data-route-phase', 'BOSS');
+  await expect(status).toHaveAttribute('data-boss-active', 'true');
+  await expect(status).toHaveAttribute('data-boss-hp', '900');
+  await expect(status).toHaveAttribute('data-boss-state', 'PURSUIT');
+  await expect(status).toHaveAttribute('data-boss-intro', 'true');
+  await expect(status).toHaveAttribute('data-enemies', '0');
+  await expect(page).toHaveTitle(/Raksasa Alas/);
+
+  await expect.poll(async () => await status.getAttribute('data-boss-intro'), { timeout: 5000 }).toBe('false');
+});
+
+test('transitions from boss PURSUIT to ENRAGED and exposes the victory hook', async ({ page }) => {
+  await page.goto('/');
+  const canvas = page.locator('canvas');
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) return;
+
+  await page.mouse.click(box.x + box.width * (960 / 1920), box.y + box.height * (560 / 1080));
+  const status = page.locator('#app-status');
+  await page.keyboard.press('F3');
+  await page.keyboard.press('B');
+  await expect(status).toHaveAttribute('data-boss-active', 'true');
+  await expect.poll(async () => await status.getAttribute('data-boss-intro'), { timeout: 5000 }).toBe('false');
+
+  await page.keyboard.press('Escape');
+  await expect(page).toHaveTitle(/Paused/);
+  await page.waitForTimeout(700);
+  await expect(status).toHaveAttribute('data-boss-hp', '900');
+  await page.keyboard.press('Escape');
+  await expect(page).toHaveTitle(/Raksasa Alas/);
+
+  await page.keyboard.press('C');
+  await expect(status).toHaveAttribute('data-boss-hp', '600');
+  await page.keyboard.press('C');
+  await expect(status).toHaveAttribute('data-boss-hp', '300');
+  await expect(status).toHaveAttribute('data-boss-state', 'ENRAGED');
+  await page.keyboard.press('C');
+
+  await expect(status).toHaveAttribute('data-boss-active', 'false');
+  await expect(status).toHaveAttribute('data-boss-defeated', 'true');
+  await expect(status).toHaveAttribute('data-route-phase', 'DESTINATION');
+  await expect(status).toHaveAttribute('data-result-outcome', 'VICTORY');
+  await expect(status).toHaveAttribute('data-result-reason', 'DESTINATION_REACHED');
+  await expect(status).toHaveAttribute('data-scrap', '100');
+  await expect(page).toHaveTitle(/Victory — Destination/);
+});
+
+test('shows Game Over for player defeat and retries into a clean run without refresh', async ({ page }) => {
+  await page.goto('/');
+  const canvas = page.locator('canvas');
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) return;
+
+  await page.mouse.click(box.x + box.width * (960 / 1920), box.y + box.height * (560 / 1080));
+  const status = page.locator('#app-status');
+  await page.keyboard.press('F3');
+  await page.keyboard.press('X');
+
+  await expect(status).toHaveAttribute('data-result-outcome', 'GAME_OVER');
+  await expect(status).toHaveAttribute('data-result-reason', 'PLAYER_DOWN');
+  await expect(status).toHaveAttribute('data-player-hp', '0');
+  await expect(page).toHaveTitle(/Game Over/);
+
+  await page.keyboard.press('R');
+  await expect(page).toHaveTitle(/Gameplay Prototype/);
+  await expect(status).toHaveAttribute('data-result-outcome', '');
+  await expect(status).toHaveAttribute('data-player-hp', '100');
+  await expect(status).toHaveAttribute('data-route-phase', 'DEPARTURE');
+
+  await page.keyboard.press('M');
+  await expect(page).toHaveTitle(/Main Menu/);
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveTitle(/Gameplay Prototype/);
+  await expect(status).toHaveAttribute('data-player-hp', '100');
+});
+
+test('shows Game Over when the locomotive reaches zero HP', async ({ page }) => {
+  await page.goto('/');
+  const canvas = page.locator('canvas');
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) return;
+
+  await page.mouse.click(box.x + box.width * (960 / 1920), box.y + box.height * (560 / 1080));
+  const status = page.locator('#app-status');
+  await page.keyboard.press('F3');
+  for (let index = 0; index < 7; index += 1) await page.keyboard.press('4');
+
+  await expect(status).toHaveAttribute('data-result-outcome', 'GAME_OVER');
+  await expect(status).toHaveAttribute('data-result-reason', 'LOCOMOTIVE_FAILED');
+  await expect(page).toHaveTitle(/Game Over/);
 });

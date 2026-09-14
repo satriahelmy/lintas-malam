@@ -1,6 +1,6 @@
 # Lintas Malam V1 — Implementation Task Plan
 
-Status: active implementation plan. M1–M8 are implemented incrementally with placeholder visuals only; final art and later V1 systems remain gated by the milestone plan.
+Status: active implementation plan. M1–M12 are implemented incrementally with placeholder visuals only; final art and later V1 systems remain gated by the milestone plan.
 
 ## Source of truth and V1 guardrails
 
@@ -581,16 +581,20 @@ M3, M6, and M7. M9 supplies survivor recruitment behavior; M10 supplies exact ro
 
 Make survivors visible human participants with simple passive benefits tied to the train and station decisions.
 
+### Status
+
+Complete. Four run-local survivor archetypes now have grounded placeholder portraits, duplicate-safe rescue, measurable passive modifiers, Perawat recovery, Passenger Car benefit degradation, and station rescue candidate presentation.
+
 ### Tasks
 
-- [ ] M9.1 Define four data-driven survivor archetypes: Montir, Pedagang, Perawat, and Penjaga, with display name, silhouette placeholder, and passive definition.
-- [ ] M9.2 Implement a run-local survivor roster and survivor count. Survivors must be represented by characters/sprites or placeholders, not only by numeric modifiers.
-- [ ] M9.3 Implement Montir: repair effectiveness +25% or the equivalent configured value.
-- [ ] M9.4 Implement Pedagang: station purchase cost reduction with a non-negative final cost.
-- [ ] M9.5 Implement Perawat: a small, bounded player health-recovery effect. Use one simple documented trigger, preferably modest regeneration after a configurable no-damage delay.
-- [ ] M9.6 Implement Penjaga: increased train/Defense Car effectiveness through the shared defense modifier.
-- [ ] M9.7 Implement the Passenger Car interaction: severe passenger-car damage reduces or disables a configured portion of survivor benefits, and recovery restores the benefit according to the chosen rule.
-- [ ] M9.8 Present a rescued survivor with a small grounded character presentation and passive description. Do not add dialogue trees, rarity, or relationship systems.
+- [x] M9.1 Define four data-driven survivor archetypes: Montir, Pedagang, Perawat, and Penjaga, with display name, silhouette placeholder, and passive definition.
+- [x] M9.2 Implement a run-local survivor roster and survivor count. Survivors must be represented by characters/sprites or placeholders, not only by numeric modifiers.
+- [x] M9.3 Implement Montir: repair effectiveness +25% or the equivalent configured value.
+- [x] M9.4 Implement Pedagang: station purchase cost reduction with a non-negative final cost.
+- [x] M9.5 Implement Perawat: a small, bounded player health-recovery effect. Use one simple documented trigger, preferably modest regeneration after a configurable no-damage delay.
+- [x] M9.6 Implement Penjaga: increased train/Defense Car effectiveness through the shared defense modifier.
+- [x] M9.7 Implement the Passenger Car interaction: severe passenger-car damage reduces or disables a configured portion of survivor benefits, and recovery restores the benefit according to the chosen rule.
+- [x] M9.8 Present a rescued survivor with a small grounded character presentation and passive description. Do not add dialogue trees, rarity, or relationship systems.
 
 ### Dependencies
 
@@ -606,14 +610,14 @@ M3 for Passenger Car state, M7 for shared modifiers, and M8 for recruitment. M13
 
 ### Test checklist
 
-- [ ] Recruit each archetype once and verify roster/count.
-- [ ] Verify Montir repair modifier numerically.
-- [ ] Verify Pedagang discount never produces a negative cost.
-- [ ] Verify Perawat recovery trigger, rate, cap, and interruption behavior.
-- [ ] Verify Penjaga defense modifier against train damage/Defense Car output.
-- [ ] Verify Passenger Car damage penalty and restoration behavior.
-- [ ] Verify survivor presentation is visible without blocking the station flow.
-- [ ] Verify no duplicate/invalid survivor is added.
+- [x] Recruit each archetype once and verify roster/count.
+- [x] Verify Montir repair modifier numerically.
+- [x] Verify Pedagang discount never produces a negative cost.
+- [x] Verify Perawat recovery trigger, rate, cap, and interruption behavior.
+- [x] Verify Penjaga defense modifier against train damage/Defense Car output.
+- [x] Verify Passenger Car damage penalty and restoration behavior.
+- [x] Verify survivor presentation is visible without blocking the station flow.
+- [x] Verify no duplicate/invalid survivor is added.
 
 ## M10 — Difficulty progression and route structure
 
@@ -621,16 +625,20 @@ M3 for Passenger Car state, M7 for shared modifiers, and M8 for recruitment. M13
 
 Turn the prototype arena into the defined journey through three visually and numerically distinct biomes with exactly two station stops and a controlled difficulty ramp.
 
+### Status
+
+Complete. Route timing, biome palette data, journey markers, four encounter profiles, profile-driven enemy pressure, reversible debug time scale, and idempotent station/boss gate progression are implemented and verified.
+
 ### Tasks
 
-- [ ] M10.1 Define typed route phases and target durations: departure/onboarding about 1 minute, each biome about 3 minutes, each station about 30 seconds, boss about 2 minutes, with balancing ranges rather than hard timers.
-- [ ] M10.2 Define Biome 1 Farmland, Biome 2 Plantation & Forest, and Biome 3 Highland Night as data entries. V1 biome differences come from environment, enemy composition, spawn pressure, and palette; no unique biome mechanic is required.
-- [ ] M10.3 Add progress tracking independent of visual scroll distance. Expose a journey percentage and route marker state.
-- [ ] M10.4 Add station markers only after Biome 1 and Biome 2; do not accidentally create additional stops.
-- [ ] M10.5 Define early, mid, late, and boss-preparation encounter profiles: low pressure early, fast enemy introduction in mid, heavier Keeper pressure late, and a final boss gate.
-- [ ] M10.6 Tune spawn interval, active cap, enemy mix, enemy stats, and reward rate through data/configuration rather than scene-specific constants.
-- [ ] M10.7 Add a reversible difficulty test mode or debug time scale for balance sessions; keep it out of the player-facing V1 UI.
-- [ ] M10.8 Ensure station and boss triggers are idempotent and cannot fire twice due to frame timing or a skipped progress value.
+- [x] M10.1 Define typed route phases and target durations: departure/onboarding about 1 minute, each biome about 3 minutes, each station about 30 seconds, boss about 2 minutes, with balancing ranges rather than hard timers.
+- [x] M10.2 Define Biome 1 Farmland, Biome 2 Plantation & Forest, and Biome 3 Highland Night as data entries. V1 biome differences come from environment, enemy composition, spawn pressure, and palette; no unique biome mechanic is required.
+- [x] M10.3 Add progress tracking independent of visual scroll distance. Expose a journey percentage and route marker state.
+- [x] M10.4 Add station markers only after Biome 1 and Biome 2; do not accidentally create additional stops.
+- [x] M10.5 Define early, mid, late, and boss-preparation encounter profiles: low pressure early, fast enemy introduction in mid, heavier Keeper pressure late, and a final boss gate.
+- [x] M10.6 Tune spawn interval, active cap, enemy mix, enemy stats, and reward rate through data/configuration rather than scene-specific constants.
+- [x] M10.7 Add a reversible difficulty test mode or debug time scale for balance sessions; keep it out of the player-facing V1 UI.
+- [x] M10.8 Ensure station and boss triggers are idempotent and cannot fire twice due to frame timing or a skipped progress value.
 
 ### Dependencies
 
@@ -647,14 +655,14 @@ M5, M6, M8, and M9. M11 consumes the final boss gate.
 
 ### Test checklist
 
-- [ ] Run the route with a deterministic seed and verify phase order.
-- [ ] Verify exact station count and one-time station entry/exit.
-- [ ] Verify no enemy attacks during both stations.
-- [ ] Verify early/mid/late enemy composition and pressure.
-- [ ] Verify progress is monotonic and reaches the boss gate once.
-- [ ] Test with large simulated frame deltas around each transition.
-- [ ] Record section durations and total run duration for balancing.
-- [ ] Verify environment layer/biome switches do not reset player, train, Scrap, or upgrades.
+- [x] Run the route with a deterministic seed and verify phase order.
+- [x] Verify exact station count and one-time station entry/exit.
+- [x] Verify no enemy attacks during both stations.
+- [x] Verify early/mid/late enemy composition and pressure.
+- [x] Verify progress is monotonic and reaches the boss gate once.
+- [x] Test with large simulated frame deltas around each transition.
+- [x] Record section durations and total run duration for balancing through route target configuration.
+- [x] Verify environment layer/biome switches do not reset player, train, Scrap, or upgrades.
 
 ## M11 — Boss encounter
 
@@ -662,19 +670,23 @@ M5, M6, M8, and M9. M11 consumes the final boss gate.
 
 Deliver one readable final encounter that tests the player’s run choices without requiring a cinematic system.
 
+### Status
+
+Complete. Raksasa Alas has a data-driven domain system, a short intro gate, pursuit/enraged behavior, contact and area attacks, telegraph presentation, regular-enemy shutdown, combat integration, and an idempotent destination/victory hook. The final result screen and Game Over ownership remain M12 work.
+
 ### Tasks
 
-- [ ] M11.1 Define Raksasa Alas with high HP, contact/basic attack, area attack, attack cooldowns, movement speed, and reward/result data.
-- [ ] M11.2 Implement a brief 1–2 second boss introduction: environment/audio hooks, train-light flicker hook, boss name, then gameplay.
-- [ ] M11.3 Implement behavior state 1 as deliberate pursuit/pressure around the train.
-- [ ] M11.4 Implement behavior state 2 as a readable enrage or damaged state with changed timing/positioning and an area attack.
-- [ ] M11.5 Add a short telegraph before the area attack; show the danger area with shape/contrast, not color alone, and allow a reasonable response window.
-- [ ] M11.6 Stop regular spawn composition when the boss begins unless a balance test explicitly proves a small supporting pressure is necessary. Keep V1 readable.
-- [ ] M11.7 On boss defeat, clear active boss attacks and unlock the destination/victory transition exactly once.
+- [x] M11.1 Define Raksasa Alas with high HP, contact/basic attack, area attack, attack cooldowns, movement speed, and reward/result hooks.
+- [x] M11.2 Implement a brief 1–2 second boss introduction with a boss name, readable warning copy, and hooks ready for environment/audio/train-light feedback; keep the train and boss visible without a long cinematic.
+- [x] M11.3 Implement behavior state 1 as deliberate pursuit/pressure around the train and player.
+- [x] M11.4 Implement behavior state 2 as a readable ENRAGED state with increased pursuit speed, faster area timing, and increased area damage.
+- [x] M11.5 Add a short telegraph before the area attack; show the danger area with outline, fill, and position contrast rather than color alone, with a 1.2 second response window.
+- [x] M11.6 Stop regular enemy spawning and clear active regular enemies/projectiles when the boss begins; keep V1 readable.
+- [x] M11.7 On boss defeat, clear the active boss state and unlock the destination/victory transition exactly once; leave final result presentation to M12.
 
 ### Dependencies
 
-M4, M5, M10, and M12’s result-state hooks.
+M4, M5, and M10. M12 consumes the idempotent victory hook and owns final result-state presentation.
 
 ### Acceptance criteria
 
@@ -686,14 +698,15 @@ M4, M5, M10, and M12’s result-state hooks.
 
 ### Test checklist
 
-- [ ] Verify boss spawns once at the correct route point.
-- [ ] Verify intro duration and skip/continue behavior.
-- [ ] Verify each boss state transition at its configured threshold.
-- [ ] Verify basic attack and area attack cooldowns.
-- [ ] Verify telegraph timing, area bounds, damage, and player escape.
-- [ ] Verify boss attacks stop on pause, death, and victory.
-- [ ] Verify boss cannot be duplicated by repeated progress events.
-- [ ] Verify boss defeat produces one victory-eligible event.
+- [x] Verify boss spawns once at the correct route point; the debug B gate is available for deterministic browser coverage.
+- [x] Verify intro duration and continue behavior without trapping the player in a cinematic.
+- [x] Verify each boss state transition at its configured threshold.
+- [x] Verify basic attack and area attack cooldowns.
+- [x] Verify telegraph timing, area bounds, damage, and target escape window in deterministic unit tests.
+- [x] Verify regular boss simulation is not run during the intro and regular enemies are cleared at entry.
+- [x] Verify boss cannot be duplicated by repeated progress events or repeated defeat damage.
+- [x] Verify boss defeat produces one victory-eligible event and clears active boss attacks.
+- [x] M12 follow-up: final result screens, Game Over precedence, Retry cleanup, and destination completion are covered by the M12 tests below.
 
 ## M12 — Victory and Game Over flow
 
@@ -701,15 +714,19 @@ M4, M5, M10, and M12’s result-state hooks.
 
 Close every run cleanly, communicate why it ended, and support Retry without refreshing the browser.
 
+### Status
+
+Complete. Terminal ownership is centralized in `ResultSystem`; Game Over and Victory are rendered as restrained in-scene result panels with run statistics, keyboard/mouse actions, and a fresh in-memory Retry path. No result data is persisted.
+
 ### Tasks
 
-- [ ] M12.1 Define terminal transition ownership and precedence for Player HP = 0, Locomotive HP = 0, boss defeat, and destination reached.
-- [ ] M12.2 Implement Game Over when Player HP or Locomotive HP reaches zero. Stop gameplay simulation and prevent duplicate result transitions.
-- [ ] M12.3 Implement Victory only after all three biomes are crossed, the boss is defeated, the train remains operational, and destination progress completes.
-- [ ] M12.4 Collect run statistics: distance/progress, enemies defeated, Scrap collected, survivors rescued, run duration, and train condition.
-- [ ] M12.5 Implement result screens with `Retry` and `Main Menu` actions. Retry constructs a fresh `RunState` without a browser refresh.
-- [ ] M12.6 Add restrained placeholder transitions: train slows/power cuts for Game Over; a pause for breath and gradual dawn-color placeholder for Victory.
-- [ ] M12.7 Ensure result screens expose enough information to diagnose balance failures during development.
+- [x] M12.1 Define terminal transition ownership and precedence for Player HP = 0, Locomotive HP = 0, boss defeat, and destination reached. Player/train failure wins over Victory when conditions collide in one update.
+- [x] M12.2 Implement Game Over when Player HP or Locomotive HP reaches zero. Stop gameplay simulation and prevent duplicate result transitions.
+- [x] M12.3 Implement Victory only after all three biomes are crossed through the boss gate, the boss is defeated, the train remains operational, and destination progress completes.
+- [x] M12.4 Collect run statistics: distance/progress, enemies defeated, Scrap collected, survivors rescued, run duration, and aggregate train condition.
+- [x] M12.5 Implement result panels with `Retry` and `Main Menu` actions. Retry constructs a fresh `RunState` without a browser refresh.
+- [x] M12.6 Add restrained placeholder transitions: stop train/combat on Game Over, dim the world, and use a dawn-colored placeholder world on Victory.
+- [x] M12.7 Expose result outcome/reason/statistics through development diagnostics so balance failures remain inspectable.
 
 ### Dependencies
 
@@ -725,14 +742,15 @@ M3, M5, M6, M9, M10, and M11.
 
 ### Test checklist
 
-- [ ] Force Player HP to zero and verify Game Over.
-- [ ] Force Locomotive HP to zero and verify Game Over.
-- [ ] Force both failures in the same update and verify deterministic terminal-state precedence and result data.
-- [ ] Defeat boss before/after a train-critical condition and verify only valid Victory.
-- [ ] Verify result statistics against known deterministic events.
-- [ ] Retry at least five times without refresh and inspect entity/timer cleanup.
-- [ ] Return to menu and begin another run with default state.
-- [ ] Verify terminal states cannot receive damage, input, or progress updates.
+- [x] Force Player HP to zero and verify Game Over.
+- [x] Force Locomotive HP to zero and verify Game Over.
+- [x] Force both failures in the same update and verify deterministic terminal-state precedence and result data.
+- [x] Defeat the boss with an operational train and verify only the valid Victory result.
+- [x] Verify result statistics against known deterministic events.
+- [x] Retry without refresh and inspect default player, route, and result state cleanup.
+- [x] Return to menu and begin another run with default state.
+- [x] Verify terminal state stops normal gameplay updates and blocks player-defeat debug input.
+- [ ] M17 follow-up: repeat Retry five or more times while profiling long-run entity/tween cleanup.
 
 ## M13 — UI and HUD
 

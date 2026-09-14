@@ -14,6 +14,8 @@ export interface GameEventMap {
   };
   'locomotive-failed': { sectionId: 'LOCOMOTIVE' };
   'train-movement-changed': { moving: boolean };
+  'boss-introduced': { bossId: 'RAKSASA_ALAS' };
+  'boss-defeated': { bossId: 'RAKSASA_ALAS' };
 }
 
 export type GameEventName = keyof GameEventMap;

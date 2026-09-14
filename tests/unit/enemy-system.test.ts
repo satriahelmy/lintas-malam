@@ -112,4 +112,22 @@ describe('EnemySystem', () => {
     expect(events).toContainEqual({ type: 'removed', enemyId: offscreen?.id, archetype: 'MIST', reason: 'OFFSCREEN' });
     expect(cleanupSystem.getActiveCount()).toBe(0);
   });
+
+  it('applies encounter tuning to composition, cap, and spawned stats', () => {
+    const system = new EnemySystem();
+    system.setTuning({
+      activeCap: 1,
+      spawnWeights: { MIST: 0, SHADOW: 0, KEEPER: 1 },
+      healthMultiplier: 2,
+      damageMultiplier: 1.5,
+      speedMultiplier: 2,
+      attackIntervalMultiplier: 0.5,
+      dropMultiplier: 2,
+    });
+
+    const keeper = system.spawnWeighted('REAR', 0, context(), 0);
+    expect(keeper).toMatchObject({ archetype: 'KEEPER', maxHealth: 220, damage: 27, speed: 130, attackIntervalMs: 750, dropValue: 20 });
+    expect(system.getActiveCap()).toBe(1);
+    expect(system.spawnWeighted('REAR', 0, context(), 0)).toBeNull();
+  });
 });

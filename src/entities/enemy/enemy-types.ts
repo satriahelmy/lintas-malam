@@ -25,6 +25,16 @@ export interface EnemyConfig {
   retargetIntervalMs: number;
 }
 
+export interface EnemyTuning {
+  activeCap: number;
+  spawnWeights: Readonly<Record<EnemyArchetype, number>>;
+  healthMultiplier: number;
+  damageMultiplier: number;
+  speedMultiplier: number;
+  attackIntervalMultiplier: number;
+  dropMultiplier: number;
+}
+
 export interface EnemyTargetSnapshot {
   id: 'PLAYER' | TrainSectionId;
   type: 'PLAYER' | 'TRAIN';

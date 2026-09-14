@@ -6,14 +6,20 @@ import type { TrainSectionId } from '../core/run-state';
 import { SessionContext } from '../core/session-context';
 import { COLORS, DESIGN_VIEWPORT_HEIGHT, DESIGN_VIEWPORT_WIDTH } from '../game/game-config';
 import { SceneKeys } from '../game/scene-keys';
-import { ENEMY_SPAWN_INTERVAL_MS, ENEMY_SPAWN_SIDES } from '../data/enemy-config';
+import { getRoutePhaseDefinition } from '../data/route-config';
+import { ENEMY_SPAWN_SIDES } from '../data/enemy-config';
 import { BASE_WEAPON } from '../data/player-config';
 import { PLAYER_START_POSITION, TRAIN_COMBAT_BOUNDS, TRAIN_SECTION_LAYOUT } from '../data/train-config';
+import { BossSystem } from '../systems/boss-system';
+import type { BossSystemEvent, BossTargetContext } from '../entities/boss/boss-types';
 import type { CombatTarget, ProjectileHitEvent, ProjectileState } from '../entities/combat/combat-types';
+import type { RunResult } from '../entities/result/result-types';
 import { EnemySystem } from '../entities/enemy/enemy-system';
 import type { EnemyArchetype, EnemyState, EnemySystemEvent, EnemyTargetContext } from '../entities/enemy/enemy-types';
+import type { BiomeId } from '../entities/route/route-types';
 import type { UpgradeDefinition } from '../entities/upgrade/upgrade-types';
 import type { StationDefinition, StationId, StationRepairQuote } from '../entities/station/station-types';
+import type { SurvivorDefinition, SurvivorId } from '../entities/survivor/survivor-types';
 import { getTrainCondition, TrainSystem } from '../entities/train/train-system';
 import type { TrainCondition } from '../entities/train/train-types';
 import type { ScrapPickup, ScrapSystemEvent } from '../entities/pickup/pickup-types';
@@ -24,12 +30,22 @@ import { ScrapSystem } from '../systems/scrap-system';
 import { DefenseTurretSystem } from '../systems/defense-turret-system';
 import { UpgradeOfferDirector, UpgradeSystem } from '../systems/upgrade-system';
 import { StationSystem } from '../systems/station-system';
+import { SurvivorSystem } from '../systems/survivor-system';
+import { RouteSystem } from '../systems/route-system';
+import { ResultSystem } from '../systems/result-system';
 
 interface ParallaxLayer {
   objects: Phaser.GameObjects.Rectangle[];
   speed: number;
   segmentWidth: number;
   totalWidth: number;
+}
+
+function formatRunDuration(seconds: number): string {
+  const totalSeconds = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+  const remainingSeconds = (totalSeconds % 60).toString().padStart(2, '0');
+  return `${minutes}:${remainingSeconds}`;
 }
 
 interface TrainSectionView {
@@ -44,6 +60,11 @@ interface ProjectileView {
 }
 
 interface EnemyView {
+  shape: Phaser.GameObjects.Shape;
+  label: Phaser.GameObjects.Text;
+}
+
+interface BossView {
   shape: Phaser.GameObjects.Shape;
   label: Phaser.GameObjects.Text;
 }
@@ -64,6 +85,12 @@ interface StationSectionView {
   panel: Phaser.GameObjects.Rectangle;
   label: Phaser.GameObjects.Text;
   action: Phaser.GameObjects.Text;
+}
+
+interface SurvivorView {
+  id: SurvivorId;
+  marker: Phaser.GameObjects.Arc;
+  label: Phaser.GameObjects.Text;
 }
 
 const CONDITION_COLORS: Record<TrainCondition, number> = {
@@ -110,6 +137,22 @@ export class GameplayScene extends Phaser.Scene {
   private stationUpgradeButton?: Phaser.GameObjects.Text;
   private stationRescueButton?: Phaser.GameObjects.Text;
   private stationDepartButton?: Phaser.GameObjects.Text;
+  private survivorRosterTitle?: Phaser.GameObjects.Text;
+  private bossView?: BossView;
+  private bossTelegraph?: Phaser.GameObjects.Arc;
+  private bossIntroShade?: Phaser.GameObjects.Rectangle;
+  private bossIntroTitle?: Phaser.GameObjects.Text;
+  private bossIntroInfo?: Phaser.GameObjects.Text;
+  private resultShade?: Phaser.GameObjects.Rectangle;
+  private resultPanel?: Phaser.GameObjects.Rectangle;
+  private resultTitle?: Phaser.GameObjects.Text;
+  private resultReason?: Phaser.GameObjects.Text;
+  private resultStats?: Phaser.GameObjects.Text;
+  private resultRetryButton?: Phaser.GameObjects.Text;
+  private resultMenuButton?: Phaser.GameObjects.Text;
+  private worldBackground?: Phaser.GameObjects.Rectangle;
+  private worldSky?: Phaser.GameObjects.Rectangle;
+  private worldGround?: Phaser.GameObjects.Rectangle;
   private playerPosition: { x: number; y: number } = { ...PLAYER_START_POSITION };
   private pointerPosition: { x: number; y: number } = { x: PLAYER_START_POSITION.x + 160, y: PLAYER_START_POSITION.y };
   private readonly combatTargets: CombatTarget[] = [];
@@ -118,18 +161,32 @@ export class GameplayScene extends Phaser.Scene {
   private readonly scrapViews = new Map<string, ScrapPickupView>();
   private readonly upgradeCards: UpgradeCardView[] = [];
   private readonly stationSectionViews: StationSectionView[] = [];
+  private readonly survivorViews = new Map<SurvivorId, SurvivorView>();
   private combatSystem?: CombatSystem;
   private enemySystem?: EnemySystem;
   private scrapSystem?: ScrapSystem;
   private upgradeSystem?: UpgradeSystem;
   private upgradeOfferDirector?: UpgradeOfferDirector;
   private defenseTurretSystem?: DefenseTurretSystem;
+  private bossSystem?: BossSystem;
+  private resultSystem?: ResultSystem;
   private stationSystem?: StationSystem;
+  private survivorSystem?: SurvivorSystem;
+  private routeSystem?: RouteSystem;
   private activeUpgradeOffer: readonly UpgradeDefinition[] = [];
   private activeStation?: StationDefinition;
   private stationSelectedSection: TrainSectionId = 'DEFENSE';
   private stationUpgradeMode = false;
+  private stationRescueIndex = 0;
+  private stationRescueUsed = false;
   private playerInvulnerableUntilMs = 0;
+  private lastPlayerDamageAtMs = 0;
+  private bossIntroRemainingMs = 0;
+  private bossDefeatHandled = false;
+  private activeResult?: RunResult;
+  private pausedFromState: 'PLAYING' | 'BOSS' = 'PLAYING';
+  private debugTimeScale = 1;
+  private currentBiomeId?: BiomeId;
   private elapsedMs = 0;
   private enemySpawnElapsedMs = 0;
   private enemySpawnSideIndex = 0;
@@ -170,6 +227,13 @@ export class GameplayScene extends Phaser.Scene {
     document.querySelector<HTMLElement>('#app-status')?.setAttribute('data-debug', String(this.debugEnabled));
     this.debugOverlay?.setVisible(this.debugEnabled);
     this.debugText?.setVisible(this.debugEnabled);
+    this.updateDebugOverlay();
+  };
+
+  private readonly handleDebugTimeScale = (): void => {
+    if (!this.debugEnabled) return;
+    this.debugTimeScale = this.debugTimeScale === 1 ? 4 : 1;
+    document.querySelector<HTMLElement>('#app-status')?.setAttribute('data-debug-time-scale', String(this.debugTimeScale));
     this.updateDebugOverlay();
   };
 
@@ -237,7 +301,20 @@ export class GameplayScene extends Phaser.Scene {
     this.applyDamageToPlayer(10);
   };
 
+  private readonly handleDebugPlayerDefeat = (): void => {
+    if (!this.debugEnabled) return;
+    const session = this.registry.get('session') as SessionContext | undefined;
+    const player = session?.run?.player;
+    if (!player || this.isResultOpen()) return;
+    player.health = 0;
+    this.checkTerminalState();
+  };
+
   private readonly handleDebugResetTarget = (): void => {
+    if (this.isResultOpen()) {
+      this.retryRun();
+      return;
+    }
     if (this.stationUpgradeMode && this.isStationOpen()) return;
     if (this.isStationOpen()) {
       this.repairSelectedStationSection();
@@ -280,6 +357,23 @@ export class GameplayScene extends Phaser.Scene {
     this.openStation(stationId);
   };
 
+  private readonly handleDebugBossOpen = (): void => {
+    if (!this.debugEnabled || !this.routeSystem) return;
+    const session = this.registry.get('session') as SessionContext | undefined;
+    const run = session?.run;
+    if (!session || !run || session.gameState.value !== 'PLAYING') return;
+    run.routePhase = 'BOSS';
+    run.progress = getRoutePhaseDefinition('BOSS').startProgress;
+    this.openBossEncounter();
+  };
+
+  private readonly handleDebugBossDamage = (): void => {
+    if (!this.debugEnabled || !this.bossSystem?.isActive()) return;
+    this.processBossEvents(this.bossSystem.applyDamage(300));
+    this.updateBossView();
+    this.updateDiagnostics();
+  };
+
   private readonly handleDebugUpgradeOffer = (): void => {
     if (!this.debugEnabled) return;
     if (this.isStationOpen()) {
@@ -297,6 +391,10 @@ export class GameplayScene extends Phaser.Scene {
     this.rescueStationSurvivor();
   };
 
+  private readonly handleStationRescueNext = (): void => {
+    this.selectNextStationRescueOption();
+  };
+
   private readonly handleStationDepart = (): void => {
     this.departStation();
   };
@@ -307,11 +405,13 @@ export class GameplayScene extends Phaser.Scene {
     this.input.keyboard?.off('keydown-ESC', this.handleEscape);
     this.input.keyboard?.off('keydown-M', this.handleMenuKey);
     this.input.keyboard?.off('keydown-F3', this.handleDebugKey);
+    this.input.keyboard?.off('keydown-F4', this.handleDebugTimeScale);
     this.input.keyboard?.off('keydown-ONE', this.handleDebugDefenseDamage);
     this.input.keyboard?.off('keydown-TWO', this.handleDebugWorkshopDamage);
     this.input.keyboard?.off('keydown-THREE', this.handleDebugPassengerDamage);
     this.input.keyboard?.off('keydown-FOUR', this.handleDebugLocomotiveDamage);
     this.input.keyboard?.off('keydown-Q', this.handleDebugPlayerDamage);
+    this.input.keyboard?.off('keydown-X', this.handleDebugPlayerDefeat);
     this.input.keyboard?.off('keydown-R', this.handleDebugResetTarget);
     this.input.keyboard?.off('keydown-FIVE', this.handleDebugMistSpawn);
     this.input.keyboard?.off('keydown-SIX', this.handleDebugShadowSpawn);
@@ -319,8 +419,11 @@ export class GameplayScene extends Phaser.Scene {
     this.input.keyboard?.off('keydown-EIGHT', this.handleDebugScrapSpawn);
     this.input.keyboard?.off('keydown-NINE', this.handleDebugUpgradeOffer);
     this.input.keyboard?.off('keydown-ZERO', this.handleDebugStationOpen);
+    this.input.keyboard?.off('keydown-B', this.handleDebugBossOpen);
+    this.input.keyboard?.off('keydown-C', this.handleDebugBossDamage);
     this.input.keyboard?.off('keydown-U', this.handleStationUpgrade);
     this.input.keyboard?.off('keydown-N', this.handleStationRescue);
+    this.input.keyboard?.off('keydown-V', this.handleStationRescueNext);
     this.input.keyboard?.off('keydown-ENTER', this.handleStationDepart);
   };
 
@@ -330,6 +433,8 @@ export class GameplayScene extends Phaser.Scene {
 
   public init(): void {
     this.debugEnabled = false;
+    this.debugTimeScale = 1;
+    this.currentBiomeId = undefined;
     this.playerPosition = { ...PLAYER_START_POSITION };
     this.pointerPosition = { x: PLAYER_START_POSITION.x + 160, y: PLAYER_START_POSITION.y };
     this.playerInvulnerableUntilMs = 0;
@@ -340,6 +445,8 @@ export class GameplayScene extends Phaser.Scene {
     this.upgradeSystem = undefined;
     this.upgradeOfferDirector = undefined;
     this.defenseTurretSystem = undefined;
+    this.bossSystem = undefined;
+    this.resultSystem = undefined;
     this.stationSystem = undefined;
     this.combatTargets.length = 0;
     this.projectileViews.clear();
@@ -348,21 +455,47 @@ export class GameplayScene extends Phaser.Scene {
     this.upgradeCards.length = 0;
     this.stationSectionViews.length = 0;
     this.scrapHudText = undefined;
+    this.survivorRosterTitle = undefined;
+    this.bossView = undefined;
+    this.bossTelegraph = undefined;
+    this.bossIntroShade = undefined;
+    this.bossIntroTitle = undefined;
+    this.bossIntroInfo = undefined;
+    this.resultShade = undefined;
+    this.resultPanel = undefined;
+    this.resultTitle = undefined;
+    this.resultReason = undefined;
+    this.resultStats = undefined;
+    this.resultRetryButton = undefined;
+    this.resultMenuButton = undefined;
+    this.worldBackground = undefined;
+    this.worldSky = undefined;
+    this.worldGround = undefined;
     this.enemySpawnElapsedMs = 0;
     this.enemySpawnSideIndex = 0;
     this.activeUpgradeOffer = [];
     this.activeStation = undefined;
     this.stationSelectedSection = 'DEFENSE';
     this.stationUpgradeMode = false;
+    this.stationRescueIndex = 0;
+    this.stationRescueUsed = false;
     this.movementKeys = undefined;
     this.cameraSystem = undefined;
     this.trainSystem = undefined;
+    this.survivorSystem = undefined;
+    this.routeSystem = undefined;
     this.eventBus = undefined;
     this.parallaxLayers.length = 0;
     this.trainViews.length = 0;
     this.onboarding.moved = false;
     this.onboarding.aimed = false;
     this.onboarding.attacked = false;
+    this.survivorViews.clear();
+    this.lastPlayerDamageAtMs = 0;
+    this.bossIntroRemainingMs = 0;
+    this.bossDefeatHandled = false;
+    this.activeResult = undefined;
+    this.pausedFromState = 'PLAYING';
   }
 
   public create(): void {
@@ -372,6 +505,14 @@ export class GameplayScene extends Phaser.Scene {
     setAppStatus('Gameplay Prototype', 'gameplay');
     document.querySelector<HTMLElement>('#app-status')?.setAttribute('data-debug', 'false');
     document.querySelector<HTMLElement>('#app-status')?.setAttribute('data-survivor-hook', 'false');
+    document.querySelector<HTMLElement>('#app-status')?.setAttribute('data-debug-time-scale', '1');
+    document.querySelector<HTMLElement>('#app-status')?.setAttribute('data-boss-active', 'false');
+    document.querySelector<HTMLElement>('#app-status')?.setAttribute('data-boss-hp', '0');
+    document.querySelector<HTMLElement>('#app-status')?.setAttribute('data-boss-state', '');
+    document.querySelector<HTMLElement>('#app-status')?.setAttribute('data-boss-intro', 'false');
+    document.querySelector<HTMLElement>('#app-status')?.setAttribute('data-boss-defeated', 'false');
+    document.querySelector<HTMLElement>('#app-status')?.setAttribute('data-result-outcome', '');
+    document.querySelector<HTMLElement>('#app-status')?.setAttribute('data-result-reason', '');
     this.cameraSystem = new CameraSystem(this.cameras.main);
     this.cameraSystem.setShakeEnabled(true);
     this.combatSystem = new CombatSystem();
@@ -379,35 +520,60 @@ export class GameplayScene extends Phaser.Scene {
     this.upgradeSystem = new UpgradeSystem();
     this.upgradeOfferDirector = new UpgradeOfferDirector();
     this.defenseTurretSystem = new DefenseTurretSystem();
+    this.bossSystem = new BossSystem();
+    this.resultSystem = new ResultSystem();
     this.stationSystem = new StationSystem();
+    this.survivorSystem = new SurvivorSystem();
+    this.routeSystem = new RouteSystem();
     if (session?.run) {
       this.scrapSystem = new ScrapSystem(session.run);
       this.eventBus = new GameEventBus();
       this.trainSystem = new TrainSystem(session.run, this.eventBus);
-      this.eventBus.on('locomotive-failed', () => setAppStatus('Locomotive Failed — M3 Debug', 'gameplay'));
+      this.eventBus.on('locomotive-failed', () => this.checkTerminalState());
     }
+    this.applyRouteTuning();
     this.spawnEnemy('MIST', 'UPPER');
 
     this.drawPlaceholderWorld();
+    this.createSurvivorRoster();
     this.createPlayerAndAim();
     this.createCombatTarget();
     this.createOnboarding();
     this.createPauseOverlay();
     this.createUpgradeOverlay();
     this.createStationOverlay();
+    this.createBossOverlay();
+    this.createBossView();
+    this.createResultOverlay();
     this.createDebugOverlay();
+    this.updateBiomePresentation();
     this.setupInput();
+    this.updateResultOverlay();
+    this.updateDiagnostics();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown);
   }
 
   public update(_time: number, delta: number): void {
     this.updateTrainViews();
     const session = this.registry.get('session') as SessionContext | undefined;
-    if (!session || session.gameState.value !== 'PLAYING') return;
+    if (!session || (session.gameState.value !== 'PLAYING' && session.gameState.value !== 'BOSS')) return;
 
-    const deltaSeconds = Math.min(delta / 1000, 0.05);
-    this.elapsedMs += delta;
+    const scaledDelta = delta * this.debugTimeScale;
+    const deltaSeconds = Math.min(scaledDelta / 1000, 0.25);
+    this.elapsedMs += scaledDelta;
     this.updateRunProgress(deltaSeconds);
+    this.openBossEncounter();
+    if (session.gameState.value === 'BOSS' && session.run) session.run.elapsedSeconds += deltaSeconds;
+
+    if (session.gameState.value === 'BOSS' && this.bossIntroRemainingMs > 0) {
+      this.updateBossIntroduction(deltaSeconds);
+      this.updatePlayerAndAim();
+      this.updateBossView();
+      this.updateDiagnostics();
+      this.updateDebugOverlay();
+      return;
+    }
+
     const input = this.getMovementInput();
     if (input.left || input.right || input.up || input.down) this.onboarding.moved = true;
 
@@ -415,26 +581,31 @@ export class GameplayScene extends Phaser.Scene {
     this.playerPosition = moveWithinBounds(this.playerPosition, input, speed, deltaSeconds, TRAIN_COMBAT_BOUNDS);
     this.updatePlayerAndAim();
     this.updateDiagnostics();
-    this.updateEnemies(deltaSeconds);
+    if (session.gameState.value === 'PLAYING') this.updateEnemies(deltaSeconds);
+    else this.updateBoss(deltaSeconds);
     this.updateDefenseTurret(deltaSeconds);
     this.updateCombat(deltaSeconds);
     this.updateScrap(deltaSeconds);
+    this.updateSurvivorRecovery(deltaSeconds);
+    this.updateSurvivorRoster();
     this.updateParallax(deltaSeconds);
     this.updateOnboarding();
-    this.maybeOpenStation();
-    this.maybeOpenUpgradeOffer();
+    if (session.gameState.value === 'PLAYING') {
+      this.maybeOpenStation();
+      this.maybeOpenUpgradeOffer();
+    }
     this.updateDebugOverlay();
   }
 
   private drawPlaceholderWorld(): void {
-    this.add.rectangle(0, 0, DESIGN_VIEWPORT_WIDTH, DESIGN_VIEWPORT_HEIGHT, COLORS.world).setOrigin(0);
-    this.add.rectangle(0, 120, DESIGN_VIEWPORT_WIDTH, 250, COLORS.worldMid).setOrigin(0);
-    this.add.rectangle(0, 760, DESIGN_VIEWPORT_WIDTH, 320, COLORS.worldLight).setOrigin(0);
+    this.worldBackground = this.add.rectangle(0, 0, DESIGN_VIEWPORT_WIDTH, DESIGN_VIEWPORT_HEIGHT, COLORS.world).setOrigin(0);
+    this.worldSky = this.add.rectangle(0, 120, DESIGN_VIEWPORT_WIDTH, 250, COLORS.worldMid).setOrigin(0);
+    this.worldGround = this.add.rectangle(0, 760, DESIGN_VIEWPORT_WIDTH, 320, COLORS.worldLight).setOrigin(0);
     this.createParallaxLayer(225, 80, 0x1a3033, 12, 360, 7);
     this.createParallaxLayer(360, 120, 0x27443f, 22, 280, 8);
     this.createParallaxLayer(810, 150, 0x345049, 34, 240, 9);
 
-    this.add.text(96, 72, 'M5 ENEMY SYSTEM', {
+    this.add.text(96, 72, 'M10 ROUTE & DIFFICULTY', {
       color: COLORS.mutedText,
       fontFamily: 'Arial, Helvetica, sans-serif',
       fontSize: '22px',
@@ -484,6 +655,23 @@ export class GameplayScene extends Phaser.Scene {
     }).setOrigin(1, 0.5);
     this.updateTrainViews();
     this.updateHud();
+  }
+
+  private updateBiomePresentation(): void {
+    const session = this.registry.get('session') as SessionContext | undefined;
+    const run = session?.run;
+    const biome = run && this.routeSystem?.getBiome(run);
+    if (!biome || this.currentBiomeId === biome.id) return;
+
+    this.worldBackground?.setFillStyle(biome.worldColor);
+    this.worldSky?.setFillStyle(biome.skyColor);
+    this.worldGround?.setFillStyle(biome.groundColor);
+    for (let index = 0; index < this.parallaxLayers.length; index += 1) {
+      const color = biome.parallaxColors[index];
+      if (color === undefined) continue;
+      for (const object of this.parallaxLayers[index].objects) object.setFillStyle(color);
+    }
+    this.currentBiomeId = biome.id;
   }
 
   private createParallaxLayer(y: number, height: number, color: number, speed: number, segmentWidth: number, count: number): void {
@@ -568,10 +756,334 @@ export class GameplayScene extends Phaser.Scene {
     this.updateCombatTargetView();
   }
 
+  private createBossOverlay(): void {
+    this.bossIntroShade = this.add.rectangle(0, 0, DESIGN_VIEWPORT_WIDTH, DESIGN_VIEWPORT_HEIGHT, 0x120e16, 0.78)
+      .setOrigin(0)
+      .setDepth(18)
+      .setVisible(false);
+    this.bossIntroTitle = this.add.text(DESIGN_VIEWPORT_WIDTH / 2, 390, 'RAKSASA ALAS', {
+      color: '#f18b6f',
+      fontFamily: 'Georgia, Times New Roman, serif',
+      fontSize: '56px',
+      fontStyle: 'bold',
+      letterSpacing: 6,
+    }).setOrigin(0.5).setDepth(19).setVisible(false);
+    this.bossIntroInfo = this.add.text(DESIGN_VIEWPORT_WIDTH / 2, 500, '', {
+      color: COLORS.text,
+      fontFamily: 'Arial, Helvetica, sans-serif',
+      fontSize: '24px',
+      align: 'center',
+      lineSpacing: 12,
+    }).setOrigin(0.5).setDepth(19).setVisible(false);
+  }
+
+  private createBossView(): void {
+    const shape = this.add.circle(0, 0, 52, 0x2b242d)
+      .setDepth(4)
+      .setStrokeStyle(4, 0xc36a4e, 0.95)
+      .setVisible(false);
+    const label = this.add.text(0, 0, '', {
+      color: '#eee8d5',
+      fontFamily: 'Arial, Helvetica, sans-serif',
+      fontSize: '16px',
+      fontStyle: 'bold',
+      align: 'center',
+      lineSpacing: 4,
+    }).setOrigin(0.5).setDepth(5).setVisible(false);
+    this.bossView = { shape, label };
+    this.bossTelegraph = this.add.circle(0, 0, 10, 0xf18b6f, 0.16)
+      .setDepth(2)
+      .setStrokeStyle(3, 0xf18b6f, 0.9)
+      .setVisible(false);
+  }
+
+  private updateBossView(): void {
+    const state = this.bossSystem?.getState();
+    if (!state) {
+      this.bossView?.shape.setVisible(false);
+      this.bossView?.label.setVisible(false);
+      this.bossTelegraph?.setVisible(false);
+      return;
+    }
+
+    const color = state.behaviorState === 'ENRAGED' ? 0x6f3036 : 0x2b242d;
+    this.bossView?.shape.setVisible(state.active).setPosition(state.x, state.y).setFillStyle(color);
+    this.bossView?.label.setVisible(state.active).setPosition(state.x, state.y - state.radius - 42)
+      .setText(`${state.name}\nHP ${Math.ceil(state.health)}/${state.maxHealth}\n${state.behaviorState}`);
+
+    if (state.telegraph) {
+      this.bossTelegraph?.setVisible(true).setPosition(state.telegraph.x, state.telegraph.y)
+        .setScale(state.telegraph.radius / 10);
+    } else {
+      this.bossTelegraph?.setVisible(false);
+    }
+  }
+
+  private openBossEncounter(): void {
+    const session = this.registry.get('session') as SessionContext | undefined;
+    const run = session?.run;
+    if (!session || !run || session.gameState.value !== 'PLAYING' || run.routePhase !== 'BOSS' || !this.bossSystem) return;
+    if (this.bossSystem.isActive()) return;
+
+    this.enemySystem?.reset();
+    this.combatSystem?.reset();
+    this.updateEnemyViews();
+    this.bossSystem.start(this.elapsedMs);
+    this.bossIntroRemainingMs = 1500;
+    this.bossDefeatHandled = false;
+    session.gameState.transition('BOSS');
+    this.trainSystem?.stop();
+    this.eventBus?.emit('boss-introduced', { bossId: 'RAKSASA_ALAS' });
+    setAppStatus('Raksasa Alas — Boss Encounter', 'gameplay');
+    this.bossIntroShade?.setVisible(true);
+    this.bossIntroTitle?.setVisible(true);
+    this.bossIntroInfo?.setVisible(true).setText('THE FOREST GIANT BLOCKS THE LINE\nPrepare the train and survive the night.');
+    document.querySelector<HTMLElement>('#app-status')?.setAttribute('data-boss-intro', 'true');
+    this.updateBossView();
+    this.updateDiagnostics();
+  }
+
+  private updateBossIntroduction(deltaSeconds: number): void {
+    this.bossIntroRemainingMs = Math.max(0, this.bossIntroRemainingMs - deltaSeconds * 1000);
+    const seconds = Math.ceil(this.bossIntroRemainingMs / 1000);
+    this.bossIntroInfo?.setText(`THE FOREST GIANT BLOCKS THE LINE\nPrepare the train and survive the night.\n\nENGAGEMENT IN ${seconds}`);
+    if (this.bossIntroRemainingMs > 0) return;
+
+    this.bossIntroShade?.setVisible(false);
+    this.bossIntroTitle?.setVisible(false);
+    this.bossIntroInfo?.setVisible(false);
+    document.querySelector<HTMLElement>('#app-status')?.setAttribute('data-boss-intro', 'false');
+  }
+
+  private updateBoss(deltaSeconds: number): void {
+    if (!this.bossSystem) return;
+    const events = this.bossSystem.update(deltaSeconds, this.createBossTargetContext());
+    this.processBossEvents(events);
+    this.updateBossView();
+    this.updateDiagnostics();
+  }
+
+  private createBossTargetContext(): BossTargetContext {
+    const session = this.registry.get('session') as SessionContext | undefined;
+    const player = session?.run?.player;
+    const train = TRAIN_SECTION_LAYOUT.flatMap((layout) => {
+      const section = this.trainSystem?.getSection(layout.id);
+      if (!section) return [];
+      return [{
+        id: layout.id,
+        type: 'TRAIN' as const,
+        x: layout.x,
+        y: layout.y,
+        radius: Math.max(layout.width, layout.height) / 2,
+        health: section.currentHp,
+        maxHealth: section.maxHp,
+        active: section.currentHp > 0,
+      }];
+    });
+
+    return {
+      nowMs: this.elapsedMs,
+      player: {
+        id: 'PLAYER',
+        type: 'PLAYER',
+        x: this.playerPosition.x,
+        y: this.playerPosition.y,
+        radius: 24,
+        health: player?.health ?? 0,
+        maxHealth: player?.maxHealth ?? 0,
+        active: Boolean(player && player.health > 0),
+      },
+      train,
+    };
+  }
+
+  private processBossEvents(events: readonly BossSystemEvent[]): void {
+    const session = this.registry.get('session') as SessionContext | undefined;
+    for (const event of events) {
+      if (event.type === 'attacked') {
+        this.applyDamageToPlayer(event.damage);
+      } else if (event.type === 'area-telegraph') {
+        this.bossTelegraph?.setVisible(true).setPosition(event.x, event.y).setScale(event.radius / 10);
+      } else if (event.type === 'area-hit') {
+        this.bossTelegraph?.setVisible(false);
+        if (event.targetType === 'PLAYER') this.applyDamageToPlayer(event.damage);
+        else this.trainSystem?.damage(event.targetId as TrainSectionId, event.damage);
+      } else if (event.type === 'state-changed') {
+        setAppStatus(`Raksasa Alas — ${event.state}`, 'gameplay');
+      } else if (event.type === 'defeated' && session?.run && !this.bossDefeatHandled) {
+        this.bossDefeatHandled = true;
+        session.run.scrap += event.rewardScrap;
+        session.run.scrapCollected += event.rewardScrap;
+        session.run.routePhase = 'DESTINATION';
+        session.run.progress = 100;
+        this.eventBus?.emit('boss-defeated', { bossId: event.bossId });
+        setAppStatus('Destination Unlocked — M12 Result Flow', 'gameplay');
+        document.querySelector<HTMLElement>('#app-status')?.setAttribute('data-boss-defeated', 'true');
+        this.checkTerminalState();
+      }
+    }
+    this.updateTrainViews();
+    this.updateHud();
+    this.updateDiagnostics();
+  }
+
+  private createResultOverlay(): void {
+    this.resultShade = this.add.rectangle(0, 0, DESIGN_VIEWPORT_WIDTH, DESIGN_VIEWPORT_HEIGHT, 0x071018, 0.86)
+      .setOrigin(0)
+      .setDepth(30)
+      .setVisible(false);
+    this.resultPanel = this.add.rectangle(DESIGN_VIEWPORT_WIDTH / 2, 535, 820, 550, 0x11191d, 0.98)
+      .setDepth(31)
+      .setStrokeStyle(2, 0x4e5b57, 0.95)
+      .setVisible(false);
+    this.resultTitle = this.add.text(DESIGN_VIEWPORT_WIDTH / 2, 345, '', {
+      color: COLORS.text,
+      fontFamily: 'Georgia, Times New Roman, serif',
+      fontSize: '48px',
+      fontStyle: 'bold',
+      letterSpacing: 4,
+      align: 'center',
+    }).setOrigin(0.5).setDepth(32).setVisible(false);
+    this.resultReason = this.add.text(DESIGN_VIEWPORT_WIDTH / 2, 425, '', {
+      color: COLORS.mutedText,
+      fontFamily: 'Arial, Helvetica, sans-serif',
+      fontSize: '20px',
+      align: 'center',
+    }).setOrigin(0.5).setDepth(32).setVisible(false);
+    this.resultStats = this.add.text(DESIGN_VIEWPORT_WIDTH / 2, 575, '', {
+      color: COLORS.text,
+      fontFamily: 'monospace',
+      fontSize: '22px',
+      lineSpacing: 13,
+      align: 'left',
+    }).setOrigin(0.5).setDepth(32).setVisible(false);
+    this.resultRetryButton = this.add.text(820, 800, '[ RETRY ]', {
+      color: '#f3c777',
+      fontFamily: 'Arial, Helvetica, sans-serif',
+      fontSize: '26px',
+      fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(32).setVisible(false).setInteractive({ useHandCursor: true });
+    this.resultMenuButton = this.add.text(1100, 800, '[ MAIN MENU ]', {
+      color: COLORS.mutedText,
+      fontFamily: 'Arial, Helvetica, sans-serif',
+      fontSize: '26px',
+      fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(32).setVisible(false).setInteractive({ useHandCursor: true });
+
+    this.resultRetryButton.on('pointerover', () => this.resultRetryButton?.setColor('#fff0c8'));
+    this.resultRetryButton.on('pointerout', () => this.resultRetryButton?.setColor('#f3c777'));
+    this.resultMenuButton.on('pointerover', () => this.resultMenuButton?.setColor(COLORS.text));
+    this.resultMenuButton.on('pointerout', () => this.resultMenuButton?.setColor(COLORS.mutedText));
+    this.resultRetryButton.on('pointerdown', () => this.retryRun());
+    this.resultMenuButton.on('pointerdown', () => this.returnToMenu());
+  }
+
+  private updateResultOverlay(): void {
+    const result = this.activeResult;
+    const visible = Boolean(result);
+    this.resultShade?.setVisible(visible);
+    this.resultPanel?.setVisible(visible);
+    this.resultTitle?.setVisible(visible);
+    this.resultReason?.setVisible(visible);
+    this.resultStats?.setVisible(visible);
+    this.resultRetryButton?.setVisible(visible);
+    this.resultMenuButton?.setVisible(visible);
+    if (!result) return;
+
+    const victory = result.outcome === 'VICTORY';
+    this.resultShade?.setFillStyle(victory ? 0x21362f : 0x071018, 0.86);
+    this.resultPanel?.setStrokeStyle(2, victory ? 0x6f9d76 : 0x4e5b57, 0.95);
+    this.resultTitle?.setColor(victory ? '#b7d1b4' : '#eee8d5')
+      .setText(victory ? 'YOU MADE IT HOME' : 'THE TRAIN NEVER ARRIVED');
+    this.resultReason?.setText(victory ? 'The line is clear. Destination reached.' : this.getResultReasonCopy(result));
+    this.resultStats?.setText(victory
+      ? [
+        `SURVIVORS SAVED    ${result.survivorsRescued}`,
+        `TRAIN CONDITION    ${result.trainConditionPercent}%  ${result.trainCondition}`,
+        `ENEMIES DEFEATED   ${result.enemiesDefeated}`,
+        `JOURNEY            ${formatRunDuration(result.runTimeSeconds)}`,
+        `SCRAP COLLECTED    ${result.scrapCollected}`,
+      ]
+      : [
+        `DISTANCE           ${Math.floor(result.progress)}%`,
+        `ENEMIES            ${result.enemiesDefeated}`,
+        `SURVIVORS          ${result.survivorsRescued}`,
+        `TIME               ${formatRunDuration(result.runTimeSeconds)}`,
+        `SCRAP COLLECTED    ${result.scrapCollected}`,
+      ]);
+  }
+
+  private getResultReasonCopy(result: RunResult): string {
+    if (result.reason === 'PLAYER_DOWN') return 'The night took the last defender.';
+    if (result.reason === 'LOCOMOTIVE_FAILED') return 'The locomotive lost power before the destination.';
+    if (result.reason === 'PLAYER_AND_LOCOMOTIVE') return 'The player and locomotive fell together.';
+    return 'The journey ended before the destination.';
+  }
+
+  private clearProjectileViews(): void {
+    this.combatSystem?.reset();
+    for (const view of this.projectileViews.values()) view.sprite.destroy();
+    this.projectileViews.clear();
+  }
+
+  private checkTerminalState(): void {
+    const session = this.registry.get('session') as SessionContext | undefined;
+    const run = session?.run;
+    if (!session || !run || this.activeResult || !this.resultSystem) return;
+    const result = this.resultSystem.evaluate(run, this.bossDefeatHandled);
+    if (result) this.showResult(result);
+  }
+
+  private showResult(result: RunResult): void {
+    if (this.activeResult) return;
+    this.activeResult = result;
+    const session = this.registry.get('session') as SessionContext | undefined;
+    if (session) session.gameState.transition(result.outcome);
+    this.trainSystem?.stop();
+    this.enemySystem?.reset();
+    this.bossSystem?.reset();
+    this.clearProjectileViews();
+    this.updateEnemyViews();
+    this.bossTelegraph?.setVisible(false);
+    this.bossIntroShade?.setVisible(false);
+    this.bossIntroTitle?.setVisible(false);
+    this.bossIntroInfo?.setVisible(false);
+    this.pauseShade?.setVisible(false);
+    this.pauseText?.setVisible(false);
+    this.activeUpgradeOffer = [];
+    this.activeStation = undefined;
+    this.stationUpgradeMode = false;
+    if (result.outcome === 'VICTORY') {
+      this.worldSky?.setFillStyle(0x536d68);
+      this.worldGround?.setFillStyle(0x7e8067);
+      setAppStatus('Victory — Destination', 'gameplay');
+    } else {
+      for (const view of this.trainViews) view.body.setAlpha(0.45);
+      setAppStatus('Game Over', 'gameplay');
+    }
+    this.updateUpgradeOverlay();
+    this.updateStationOverlay();
+    this.updateResultOverlay();
+    this.updateDiagnostics();
+  }
+
+  private retryRun(): void {
+    const session = this.registry.get('session') as SessionContext | undefined;
+    if (!session || !this.isResultOpen()) return;
+    session.startNewRun(1);
+    this.scene.restart();
+  }
+
+  private isResultOpen(): boolean {
+    const session = this.registry.get('session') as SessionContext | undefined;
+    return session?.gameState.value === 'VICTORY' || session?.gameState.value === 'GAME_OVER';
+  }
+
   private fireWeapon(): void {
     const session = this.registry.get('session') as SessionContext | undefined;
     const player = session?.run?.player;
-    if (!session || !player || player.health <= 0 || session.gameState.value !== 'PLAYING' || !this.combatSystem) return;
+    const combatState = session?.gameState.value;
+    if (!session || !player || player.health <= 0 || (combatState !== 'PLAYING' && combatState !== 'BOSS') || !this.combatSystem) return;
 
     const projectile = this.combatSystem.fire(
       this.playerPosition,
@@ -595,7 +1107,11 @@ export class GameplayScene extends Phaser.Scene {
   private updateCombat(deltaSeconds: number): void {
     if (!this.combatSystem) return;
 
-    const targets = [...this.combatTargets, ...(this.enemySystem?.getCombatTargets() ?? [])];
+    const targets = [
+      ...this.combatTargets,
+      ...(this.enemySystem?.getCombatTargets() ?? []),
+      ...(this.bossSystem?.getCombatTargets() ?? []),
+    ];
     const hits = this.combatSystem.update(deltaSeconds, targets);
     const projectiles = this.combatSystem.getProjectiles();
     const activeProjectileIds = new Set<number>();
@@ -614,6 +1130,7 @@ export class GameplayScene extends Phaser.Scene {
 
     for (const hit of hits) this.createHitFlash(hit);
     this.processEnemyEvents(this.enemySystem?.handleCombatHits(hits, this.elapsedMs) ?? []);
+    this.processBossEvents(this.bossSystem?.handleCombatHits(hits) ?? []);
     this.updateCombatTargetView();
     this.updateEnemyViews();
     this.updateDiagnostics();
@@ -623,8 +1140,11 @@ export class GameplayScene extends Phaser.Scene {
     if (!this.enemySystem) return;
 
     this.enemySpawnElapsedMs += deltaSeconds * 1000;
-    if (this.enemySpawnElapsedMs >= ENEMY_SPAWN_INTERVAL_MS) {
-      this.enemySpawnElapsedMs -= ENEMY_SPAWN_INTERVAL_MS;
+    const session = this.registry.get('session') as SessionContext | undefined;
+    const spawnIntervalMs = session?.run && this.routeSystem?.getEncounterProfile(session.run).spawnIntervalMs;
+    const interval = spawnIntervalMs ?? 2600;
+    if (this.enemySpawnElapsedMs >= interval) {
+      this.enemySpawnElapsedMs -= interval;
       this.spawnEnemyWeighted();
     }
 
@@ -636,16 +1156,17 @@ export class GameplayScene extends Phaser.Scene {
   private updateRunProgress(deltaSeconds: number): void {
     const session = this.registry.get('session') as SessionContext | undefined;
     const run = session?.run;
-    if (!run) return;
-    run.elapsedSeconds += deltaSeconds;
-    run.progress = Math.min(100, run.progress + deltaSeconds * 0.5);
-    if (run.routePhase === 'DEPARTURE') run.routePhase = 'BIOME_1';
+    if (!run || !this.routeSystem) return;
+    this.routeSystem.advance(run, deltaSeconds);
+    this.applyRouteTuning();
+    this.updateBiomePresentation();
   }
 
   private maybeOpenStation(): void {
     const session = this.registry.get('session') as SessionContext | undefined;
     const run = session?.run;
-    const station = run && this.stationSystem?.getNextStation(run);
+    if (!run || (run.routePhase !== 'BIOME_1' && run.routePhase !== 'BIOME_2')) return;
+    const station = this.stationSystem?.getNextStation(run);
     if (!session || !run || !station || session.gameState.value !== 'PLAYING') return;
     this.openStation(station.id);
   }
@@ -689,6 +1210,13 @@ export class GameplayScene extends Phaser.Scene {
     const side = ENEMY_SPAWN_SIDES[this.enemySpawnSideIndex % ENEMY_SPAWN_SIDES.length];
     this.enemySpawnSideIndex += 1;
     this.enemySystem.spawnWeighted(side, this.elapsedMs, this.createEnemyTargetContext());
+  }
+
+  private applyRouteTuning(): void {
+    const session = this.registry.get('session') as SessionContext | undefined;
+    const run = session?.run;
+    if (!run || !this.routeSystem || !this.enemySystem) return;
+    this.enemySystem.setTuning(this.routeSystem.getEncounterProfile(run));
   }
 
   private spawnEnemy(archetype: EnemyArchetype, side: typeof ENEMY_SPAWN_SIDES[number]): void {
@@ -766,6 +1294,7 @@ export class GameplayScene extends Phaser.Scene {
       }
     }
     this.updateTrainViews();
+    this.checkTerminalState();
     this.updateDiagnostics();
   }
 
@@ -824,9 +1353,72 @@ export class GameplayScene extends Phaser.Scene {
     const session = this.registry.get('session') as SessionContext | undefined;
     const run = session?.run;
     if (!run) return;
+    const biome = this.routeSystem?.getBiome(run);
     this.scrapHudText?.setText(
-      `TRAIN HP  [SECTION STATUS ABOVE]     PLAYER HP ${Math.ceil(run.player.health)}/${run.player.maxHealth}     SCRAP  ${run.scrap}     JOURNEY  ${run.progress}%`,
+      `TRAIN HP  [SECTION STATUS ABOVE]     PLAYER HP ${Math.ceil(run.player.health)}/${run.player.maxHealth}     SCRAP  ${run.scrap}     JOURNEY  ${Math.floor(run.progress)}%  ${run.routePhase}  ${biome?.name ?? ''}`,
     );
+  }
+
+  private createSurvivorRoster(): void {
+    this.survivorRosterTitle = this.add.text(96, 176, '', {
+      color: '#d6a65f',
+      fontFamily: 'Arial, Helvetica, sans-serif',
+      fontSize: '16px',
+      fontStyle: 'bold',
+      letterSpacing: 2,
+    }).setDepth(5);
+    this.updateSurvivorRoster();
+  }
+
+  private updateSurvivorRoster(): void {
+    const session = this.registry.get('session') as SessionContext | undefined;
+    const run = session?.run;
+    const survivorSystem = this.survivorSystem;
+    if (!run || !survivorSystem) return;
+
+    const survivorIds = run.survivorIds.filter((id): id is SurvivorId => Boolean(survivorSystem.getDefinition(id as SurvivorId)));
+    const benefitState = survivorSystem.getBenefitState(run);
+    this.survivorRosterTitle?.setText(`SURVIVORS  ${survivorIds.length}/4  •  BENEFITS ${benefitState}`);
+    const modifiers = survivorSystem.getPassiveModifiers(run);
+
+    for (let index = 0; index < survivorIds.length; index += 1) {
+      const id = survivorIds[index];
+      const definition = survivorSystem.getDefinition(id);
+      if (!definition) continue;
+      const x = 118 + index * 92;
+      const y = 222;
+      const view = this.survivorViews.get(id) ?? this.createSurvivorView(definition);
+      view.marker.setPosition(x, y).setFillStyle(definition.portraitColor).setAlpha(modifiers.benefitMultiplier > 0 ? 1 : 0.45);
+      view.label.setPosition(x, y + 38).setText(`${definition.initial}\n${definition.role}`).setAlpha(modifiers.benefitMultiplier > 0 ? 1 : 0.55);
+      view.marker.setVisible(true);
+      view.label.setVisible(true);
+    }
+  }
+
+  private createSurvivorView(definition: SurvivorDefinition): SurvivorView {
+    const marker = this.add.circle(0, 0, 18, definition.portraitColor)
+      .setDepth(5)
+      .setStrokeStyle(2, 0xeee8d5, 0.8);
+    const label = this.add.text(0, 0, '', {
+      color: COLORS.text,
+      fontFamily: 'monospace',
+      fontSize: '11px',
+      align: 'center',
+    }).setOrigin(0.5).setDepth(5);
+    const view = { id: definition.id, marker, label };
+    this.survivorViews.set(definition.id, view);
+    return view;
+  }
+
+  private updateSurvivorRecovery(deltaSeconds: number): void {
+    const session = this.registry.get('session') as SessionContext | undefined;
+    const run = session?.run;
+    const player = run?.player;
+    if (!run || !player || !this.survivorSystem) return;
+    const recoveredAmount = this.survivorSystem.recoverPlayer(run, deltaSeconds, this.elapsedMs, this.lastPlayerDamageAtMs);
+    if (recoveredAmount <= 0) return;
+    this.updatePlayerAndAim();
+    this.updateDiagnostics();
   }
 
   private updateDefenseTurret(deltaSeconds: number): void {
@@ -843,7 +1435,9 @@ export class GameplayScene extends Phaser.Scene {
     );
     if (!shot) return;
 
-    const events = this.enemySystem.applyDamage(shot.targetId, shot.damage, this.elapsedMs);
+    const defenseBonus = this.survivorSystem?.getPassiveModifiers(run).defenseEffectivenessBonus ?? 0;
+    const defenseEffectiveness = this.trainSystem?.getSupportModifiers(0, defenseBonus).defenseEffectiveness ?? 1;
+    const events = this.enemySystem.applyDamage(shot.targetId, shot.damage * defenseEffectiveness, this.elapsedMs);
     this.processEnemyEvents(events);
     this.createTurretShotFlash(shot);
   }
@@ -890,7 +1484,7 @@ export class GameplayScene extends Phaser.Scene {
     const regularOffer = session?.gameState.value === 'UPGRADE' && !this.stationUpgradeMode;
     if (!session?.run || (!regularOffer && !stationPurchase) || !definition || !this.upgradeSystem || !this.trainSystem) return;
 
-    const stationCost = stationPurchase ? this.activeStation?.upgradeCost ?? 0 : 0;
+    const stationCost = stationPurchase ? this.getStationUpgradeCost(session.run) : 0;
     if (stationPurchase && !this.scrapSystem?.spend(stationCost)) {
       this.stationMessage?.setText(`Not enough Scrap. Upgrade requires ${stationCost}.`);
       this.updateUpgradeOverlay();
@@ -1137,9 +1731,21 @@ export class GameplayScene extends Phaser.Scene {
 
     this.stationTitle?.setText(this.activeStation.name);
     this.stationInfo?.setText(`SCRAP  ${run.scrap}     SELECTED SECTION  ${this.stationSelectedSection}`);
-    this.stationUpgradeButton?.setText(`[ U ]  UPGRADE  ${this.activeStation.upgradeCost} SCRAP`);
-    this.stationUpgradeButton?.setColor(run.scrap >= this.activeStation.upgradeCost ? '#f3c777' : '#7c7770');
-    this.stationRescueButton?.setText(this.activeStation.canRescueSurvivor ? '[ N ]  RESCUE SURVIVOR  AVAILABLE' : 'RESCUE UNAVAILABLE');
+    const upgradeCost = this.getStationUpgradeCost(run);
+    this.stationUpgradeButton?.setText(`[ U ]  UPGRADE  ${upgradeCost} SCRAP`);
+    this.stationUpgradeButton?.setColor(run.scrap >= upgradeCost ? '#f3c777' : '#7c7770');
+    const rescueId = this.getCurrentStationRescueId();
+    const rescueDefinition = rescueId && this.survivorSystem?.getDefinition(rescueId);
+    if (this.stationRescueUsed) {
+      this.stationRescueButton?.setText('SURVIVOR RESCUED');
+      this.stationRescueButton?.setColor('#7c7770');
+    } else if (this.activeStation.canRescueSurvivor && rescueDefinition) {
+      this.stationRescueButton?.setText(`[ N ]  RESCUE ${rescueDefinition.displayName} (${rescueDefinition.role})   [ V ] NEXT`);
+      this.stationRescueButton?.setColor('#b7d1b4');
+    } else {
+      this.stationRescueButton?.setText('RESCUE UNAVAILABLE');
+      this.stationRescueButton?.setColor('#7c7770');
+    }
 
     for (const view of this.stationSectionViews) {
       const section = run.train.find((candidate) => candidate.id === view.sectionId);
@@ -1159,6 +1765,8 @@ export class GameplayScene extends Phaser.Scene {
     if (!session?.run || !this.stationSystem || session.gameState.value !== 'PLAYING') return;
     this.activeStation = this.stationSystem.markArrived(session.run, id);
     this.stationSelectedSection = 'DEFENSE';
+    this.stationRescueIndex = 0;
+    this.stationRescueUsed = false;
     this.stationMessage?.setText('Select a damaged section, then repair, upgrade, rescue, or depart.');
     session.gameState.transition('STATION');
     this.trainSystem?.stop();
@@ -1177,7 +1785,7 @@ export class GameplayScene extends Phaser.Scene {
   private repairSelectedStationSection(): void {
     const session = this.registry.get('session') as SessionContext | undefined;
     const run = session?.run;
-    if (!run || !this.activeStation || !this.stationSystem || !this.trainSystem || !this.scrapSystem || !this.isStationOpen()) return;
+    if (!run || !this.activeStation || !this.stationSystem || !this.trainSystem || !this.scrapSystem || !this.survivorSystem || !this.isStationOpen()) return;
     const quote = this.stationSystem.getRepairQuote(run, this.stationSelectedSection, this.activeStation.id);
     if (!quote.canRepair) {
       this.stationMessage?.setText(`${this.stationSelectedSection} cannot be repaired at its current condition.`);
@@ -1189,7 +1797,8 @@ export class GameplayScene extends Phaser.Scene {
       this.updateStationOverlay();
       return;
     }
-    const effectiveness = this.trainSystem.getSupportModifiers(0, 0).repairEffectiveness;
+    const repairBonus = this.survivorSystem.getPassiveModifiers(run).repairEffectivenessBonus;
+    const effectiveness = this.trainSystem.getSupportModifiers(repairBonus, 0).repairEffectiveness;
     const repairedAmount = this.trainSystem.repair(this.stationSelectedSection, quote.repairAmount, effectiveness);
     if (repairedAmount <= 0) {
       this.scrapSystem.refund(quote.cost);
@@ -1206,8 +1815,9 @@ export class GameplayScene extends Phaser.Scene {
   private openStationUpgradeOffer(): void {
     const session = this.registry.get('session') as SessionContext | undefined;
     if (!session?.run || !this.activeStation || !this.upgradeSystem || !this.isStationOpen() || this.stationUpgradeMode) return;
-    if (session.run.scrap < this.activeStation.upgradeCost) {
-      this.stationMessage?.setText(`Not enough Scrap. Upgrade requires ${this.activeStation.upgradeCost}.`);
+    const upgradeCost = this.getStationUpgradeCost(session.run);
+    if (session.run.scrap < upgradeCost) {
+      this.stationMessage?.setText(`Not enough Scrap. Upgrade requires ${upgradeCost}.`);
       this.updateStationOverlay();
       return;
     }
@@ -1224,11 +1834,59 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private rescueStationSurvivor(): void {
-    if (!this.isStationOpen() || !this.activeStation?.canRescueSurvivor) return;
-    this.stationMessage?.setText('Survivor rescue hook ready for M9. No roster change is applied yet.');
+    const session = this.registry.get('session') as SessionContext | undefined;
+    const run = session?.run;
+    const survivorId = this.getCurrentStationRescueId();
+    if (!run || !this.survivorSystem || !this.isStationOpen() || !this.activeStation?.canRescueSurvivor || !survivorId) return;
+    if (this.stationRescueUsed) {
+      this.stationMessage?.setText('This station rescue has already been used.');
+      this.updateStationOverlay();
+      return;
+    }
+    const survivor = this.survivorSystem.getDefinition(survivorId);
+    if (!survivor) {
+      this.stationMessage?.setText('This survivor candidate is unavailable.');
+      this.updateStationOverlay();
+      this.updateDiagnostics();
+      return;
+    }
+    const result = this.survivorSystem.rescue(run, survivorId);
+    if (!result.rescued) {
+      this.stationMessage?.setText(`${survivor.displayName} is already travelling with the train.`);
+      this.updateStationOverlay();
+      this.updateDiagnostics();
+      return;
+    }
+    this.stationRescueUsed = true;
+    this.stationMessage?.setText(`${survivor.displayName} joined the train. ${survivor.description}`);
     this.updateStationOverlay();
+    this.updateSurvivorRoster();
+    this.updateHud();
+    this.updateDiagnostics();
     const status = document.querySelector<HTMLElement>('#app-status');
     status?.setAttribute('data-survivor-hook', 'true');
+  }
+
+  private selectNextStationRescueOption(): void {
+    if (!this.isStationOpen() || this.stationUpgradeMode || this.stationRescueUsed || !this.activeStation) return;
+    const optionCount = this.activeStation.rescueOptions.length;
+    if (optionCount <= 1) return;
+    this.stationRescueIndex = (this.stationRescueIndex + 1) % optionCount;
+    const survivorId = this.getCurrentStationRescueId();
+    const survivor = survivorId && this.survivorSystem?.getDefinition(survivorId);
+    if (survivor) this.stationMessage?.setText(`Rescue candidate: ${survivor.displayName} — ${survivor.role}.`);
+    this.updateStationOverlay();
+    this.updateDiagnostics();
+  }
+
+  private getCurrentStationRescueId(): SurvivorId | undefined {
+    const options = this.activeStation?.rescueOptions ?? [];
+    return options[this.stationRescueIndex % Math.max(1, options.length)];
+  }
+
+  private getStationUpgradeCost(run: NonNullable<SessionContext['run']>): number {
+    if (!this.activeStation) return 0;
+    return this.survivorSystem?.getStationCost(run, this.activeStation.upgradeCost) ?? this.activeStation.upgradeCost;
   }
 
   private departStation(): void {
@@ -1291,13 +1949,16 @@ export class GameplayScene extends Phaser.Scene {
   private applyDamageToPlayer(amount: number): void {
     const session = this.registry.get('session') as SessionContext | undefined;
     const player = session?.run?.player;
-    if (!session || !player || session.gameState.value !== 'PLAYING') return;
+    if (!session || !player || (session.gameState.value !== 'PLAYING' && session.gameState.value !== 'BOSS')) return;
 
     const result = applyPlayerDamage(player, amount, this.elapsedMs, this.playerInvulnerableUntilMs);
     this.playerInvulnerableUntilMs = result.invulnerableUntilMs;
-    if (result.appliedDamage > 0) this.createMuzzleFlash();
-    if (result.defeated) setAppStatus('Player Down — M4 Debug', 'gameplay');
+    if (result.appliedDamage > 0) {
+      this.lastPlayerDamageAtMs = this.elapsedMs;
+      this.createMuzzleFlash();
+    }
     this.updatePlayerAndAim();
+    this.checkTerminalState();
     this.updateDiagnostics();
   }
 
@@ -1395,7 +2056,8 @@ export class GameplayScene extends Phaser.Scene {
       `BOUNDS: (${TRAIN_COMBAT_BOUNDS.left}, ${TRAIN_COMBAT_BOUNDS.top}) → (${TRAIN_COMBAT_BOUNDS.right}, ${TRAIN_COMBAT_BOUNDS.bottom})`,
       `TRAIN HP: ${trainSummary}`,
       `ENEMIES: ${this.enemySystem?.getActiveCount() ?? 0}/${12}`,
-      'F3: toggle • 0: station • 1–4: train/select • 5/6/7: spawn Mist/Shadow/Keeper • 8: scrap pickup • 9: offer • Q: player damage • R: repair/reset',
+      `BOSS: ${this.bossSystem?.getState()?.behaviorState ?? 'OFF'} ${Math.ceil(this.bossSystem?.getState()?.health ?? 0)}`,
+      `F3: toggle • F4: time scale ${this.debugTimeScale}x • B: boss • C: boss damage • X: player defeat • 0: station • 1–4: train/select • 5/6/7: spawn Mist/Shadow/Keeper • 8: scrap pickup • 9: offer • Q: player damage • R: repair/reset/retry`,
     ]);
   }
 
@@ -1413,11 +2075,13 @@ export class GameplayScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-ESC', this.handleEscape);
     this.input.keyboard.on('keydown-M', this.handleMenuKey);
     this.input.keyboard.on('keydown-F3', this.handleDebugKey);
+    this.input.keyboard.on('keydown-F4', this.handleDebugTimeScale);
     this.input.keyboard.on('keydown-ONE', this.handleDebugDefenseDamage);
     this.input.keyboard.on('keydown-TWO', this.handleDebugWorkshopDamage);
     this.input.keyboard.on('keydown-THREE', this.handleDebugPassengerDamage);
     this.input.keyboard.on('keydown-FOUR', this.handleDebugLocomotiveDamage);
     this.input.keyboard.on('keydown-Q', this.handleDebugPlayerDamage);
+    this.input.keyboard.on('keydown-X', this.handleDebugPlayerDefeat);
     this.input.keyboard.on('keydown-R', this.handleDebugResetTarget);
     this.input.keyboard.on('keydown-FIVE', this.handleDebugMistSpawn);
     this.input.keyboard.on('keydown-SIX', this.handleDebugShadowSpawn);
@@ -1425,8 +2089,11 @@ export class GameplayScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-EIGHT', this.handleDebugScrapSpawn);
     this.input.keyboard.on('keydown-NINE', this.handleDebugUpgradeOffer);
     this.input.keyboard.on('keydown-ZERO', this.handleDebugStationOpen);
+    this.input.keyboard.on('keydown-B', this.handleDebugBossOpen);
+    this.input.keyboard.on('keydown-C', this.handleDebugBossDamage);
     this.input.keyboard.on('keydown-U', this.handleStationUpgrade);
     this.input.keyboard.on('keydown-N', this.handleStationRescue);
+    this.input.keyboard.on('keydown-V', this.handleStationRescueNext);
     this.input.keyboard.on('keydown-ENTER', this.handleStationDepart);
   }
 
@@ -1470,6 +2137,33 @@ export class GameplayScene extends Phaser.Scene {
     status.dataset.stationVisited = session?.run?.stationIds.join(',') ?? '';
     status.dataset.stationSelected = this.stationSelectedSection;
     status.dataset.stationUpgradeMode = String(this.stationUpgradeMode);
+    status.dataset.survivorIds = session?.run?.survivorIds.join(',') ?? '';
+    status.dataset.survivorCount = String(session?.run?.survivorIds.length ?? 0);
+    const boss = this.bossSystem?.getState();
+    status.dataset.bossActive = String(boss?.active ?? false);
+    status.dataset.bossHp = String(Math.ceil(boss?.health ?? 0));
+    status.dataset.bossState = boss?.behaviorState ?? '';
+    status.dataset.bossTelegraph = String(Boolean(boss?.telegraph));
+    status.dataset.bossIntro = String(this.bossIntroRemainingMs > 0);
+    status.dataset.bossDefeated = String(this.bossDefeatHandled);
+    status.dataset.resultOutcome = this.activeResult?.outcome ?? '';
+    status.dataset.resultReason = this.activeResult?.reason ?? '';
+    status.dataset.resultProgress = this.activeResult ? String(Math.floor(this.activeResult.progress)) : '';
+    status.dataset.survivorBenefits = session?.run && this.survivorSystem
+      ? this.survivorSystem.getBenefitState(session.run)
+      : 'DISABLED';
+    const route = session?.run && this.routeSystem;
+    if (route && session?.run) {
+      const markers = route.getMarkers(session.run);
+      status.dataset.progress = markers.progress.toFixed(2);
+      status.dataset.routePhase = markers.currentPhase;
+      status.dataset.routeMarkers = `${markers.stationProgress.join(',')}|${markers.bossProgress}`;
+      status.dataset.biome = route.getBiome(session.run).id;
+      status.dataset.encounterProfile = route.getEncounterProfile(session.run).id;
+      status.dataset.bossGate = String(session.run.routePhase === 'BOSS');
+      status.dataset.enemyCap = String(route.getEncounterProfile(session.run).activeCap);
+    }
+    status.dataset.debugTimeScale = String(this.debugTimeScale);
   }
 
   private damageDebugSection(sectionId: TrainSectionId): void {
@@ -1477,6 +2171,7 @@ export class GameplayScene extends Phaser.Scene {
     if (!this.debugEnabled || !this.trainSystem || session?.gameState.value !== 'PLAYING') return;
     this.trainSystem.damage(sectionId, 15);
     this.updateTrainViews();
+    this.checkTerminalState();
     this.updateDebugOverlay();
   }
 
@@ -1484,16 +2179,17 @@ export class GameplayScene extends Phaser.Scene {
     const session = this.registry.get('session') as SessionContext | undefined;
     if (!session) return;
 
-    if (session.gameState.value === 'PLAYING') {
+    if (session.gameState.value === 'PLAYING' || session.gameState.value === 'BOSS') {
+      this.pausedFromState = session.gameState.value;
       session.gameState.transition('PAUSED');
       this.trainSystem?.stop();
       setAppStatus('Paused', 'gameplay');
       this.pauseShade?.setVisible(true);
       this.pauseText?.setVisible(true);
     } else if (session.gameState.value === 'PAUSED') {
-      session.gameState.transition('PLAYING');
+      session.gameState.transition(this.pausedFromState);
       this.trainSystem?.resume();
-      setAppStatus('Gameplay Prototype', 'gameplay');
+      setAppStatus(this.pausedFromState === 'BOSS' ? 'Raksasa Alas — Boss Encounter' : 'Gameplay Prototype', 'gameplay');
       this.pauseShade?.setVisible(false);
       this.pauseText?.setVisible(false);
     }
@@ -1504,11 +2200,17 @@ export class GameplayScene extends Phaser.Scene {
     const canLeave = session?.gameState.value === 'PLAYING'
       || session?.gameState.value === 'PAUSED'
       || session?.gameState.value === 'STATION'
-      || session?.gameState.value === 'UPGRADE';
+      || session?.gameState.value === 'UPGRADE'
+      || session?.gameState.value === 'BOSS'
+      || session?.gameState.value === 'VICTORY'
+      || session?.gameState.value === 'GAME_OVER';
     if (!session || !canLeave) return;
     this.activeUpgradeOffer = [];
     this.activeStation = undefined;
     this.stationUpgradeMode = false;
+    this.bossSystem?.reset();
+    this.bossIntroRemainingMs = 0;
+    this.pausedFromState = 'PLAYING';
     this.updateUpgradeOverlay();
     this.updateStationOverlay();
     session.discardRun();
