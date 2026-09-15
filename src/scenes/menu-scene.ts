@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 
 import { setAppStatus } from '../core/dom-status';
 import { SessionContext } from '../core/session-context';
+import { formatOptionalAssetStatus, listOptionalAssetFallbacks, type OptionalAssetStatus } from '../data/asset-config';
 import { COLORS, DESIGN_VIEWPORT_HEIGHT, DESIGN_VIEWPORT_WIDTH } from '../game/game-config';
 import { SceneKeys } from '../game/scene-keys';
 import { createUiIcon as createFunctionalUiIcon, type UiIconKind, type UiIconOptions } from '../ui/ui-icons';
@@ -46,11 +47,32 @@ export class MenuScene extends Phaser.Scene {
     if (!this.activePanel) this.openPanel('CREDITS');
   };
 
+  private readonly handleCanvasPointerDown = (event: PointerEvent): void => {
+    if (this.activePanel !== 'SETTINGS') return;
+    const canvas = this.game.canvas;
+    if (!canvas) return;
+    const bounds = canvas.getBoundingClientRect();
+    if (bounds.width <= 0 || bounds.height <= 0) return;
+    const x = ((event.clientX - bounds.left) / bounds.width) * DESIGN_VIEWPORT_WIDTH;
+    const y = ((event.clientY - bounds.top) / bounds.height) * DESIGN_VIEWPORT_HEIGHT;
+    if (y >= 507 && y <= 563 && x >= 640 && x <= 1280) {
+      this.toggleScreenShake();
+      return;
+    }
+    if (y < 570 || y > 630) return;
+    if (x >= 700 && x <= 900) {
+      this.adjustVolume(-0.1);
+    } else if (x >= 1020 && x <= 1220) {
+      this.adjustVolume(0.1);
+    }
+  };
+
   private readonly handleShutdown = (): void => {
     this.input.keyboard?.off('keydown-ENTER', this.handleEnter);
     this.input.keyboard?.off('keydown-ESC', this.handleEscape);
     this.input.keyboard?.off('keydown-S', this.handleSettings);
     this.input.keyboard?.off('keydown-C', this.handleCredits);
+    this.game.canvas?.removeEventListener('pointerdown', this.handleCanvasPointerDown, true);
   };
 
   public constructor() {
@@ -122,6 +144,7 @@ export class MenuScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-ESC', this.handleEscape);
     this.input.keyboard?.on('keydown-S', this.handleSettings);
     this.input.keyboard?.on('keydown-C', this.handleCredits);
+    this.game.canvas?.addEventListener('pointerdown', this.handleCanvasPointerDown, true);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown);
 
     this.add.text(DESIGN_VIEWPORT_WIDTH / 2, 875, 'DESKTOP BROWSER BUILD — PLACEHOLDER VISUALS', {
@@ -180,8 +203,6 @@ export class MenuScene extends Phaser.Scene {
       fontSize: '18px',
       align: 'center',
     }).setOrigin(0.5).setDepth(11);
-    this.settingsShake.setInteractive({ useHandCursor: true });
-    this.settingsShake.on('pointerdown', () => this.toggleScreenShake());
 
     this.settingsVolume = this.add.text(DESIGN_VIEWPORT_WIDTH / 2, 600, '', {
       color: COLORS.text,
@@ -194,29 +215,21 @@ export class MenuScene extends Phaser.Scene {
       fontFamily: 'monospace',
       fontSize: '22px',
     }).setOrigin(0.5).setDepth(11);
-    this.settingsVolumeDown.setInteractive({ useHandCursor: true });
-    this.settingsVolumeDown.on('pointerdown', () => this.adjustVolume(-0.1));
     this.settingsVolumeUp = this.add.text(DESIGN_VIEWPORT_WIDTH / 2 + 160, 600, '', {
       color: '#d6a65f',
       fontFamily: 'monospace',
       fontSize: '22px',
     }).setOrigin(0.5).setDepth(11);
-    this.settingsVolumeUp.setInteractive({ useHandCursor: true });
-    this.settingsVolumeUp.on('pointerdown', () => this.adjustVolume(0.1));
     this.volumeDownIcon = this.addUiIcon('MINUS', DESIGN_VIEWPORT_WIDTH / 2 - 160, 600, {
       color: 0xeee8d5,
       accentColor: 0xf3c777,
       depth: 12,
     });
-    this.volumeDownIcon.setInteractive({ useHandCursor: true });
-    this.volumeDownIcon.on('pointerdown', () => this.adjustVolume(-0.1));
     this.volumeUpIcon = this.addUiIcon('PLUS', DESIGN_VIEWPORT_WIDTH / 2 + 160, 600, {
       color: 0xeee8d5,
       accentColor: 0xf3c777,
       depth: 12,
     });
-    this.volumeUpIcon.setInteractive({ useHandCursor: true });
-    this.volumeUpIcon.on('pointerdown', () => this.adjustVolume(0.1));
 
     this.panelClose = this.add.text(DESIGN_VIEWPORT_WIDTH / 2, 715, '[ BACK ]', {
       color: '#d6a65f',
@@ -277,6 +290,9 @@ export class MenuScene extends Phaser.Scene {
     if (!status || !session) return;
     status.dataset.uiIcons = String(this.uiIcons.length);
     status.dataset.uiIconStyle = 'railway-code-native';
+    const assetStatus = this.registry.get('optionalAssetStatus') as OptionalAssetStatus | undefined;
+    status.dataset.assetFallbacks = assetStatus ? listOptionalAssetFallbacks(assetStatus).join(',') : '';
+    status.dataset.assetStatus = assetStatus ? formatOptionalAssetStatus(assetStatus) : '';
     status.dataset.screenShake = String(session.settings.screenShakeEnabled);
     status.dataset.audioVolume = String(Math.round(session.settings.audioVolume * 100));
   }

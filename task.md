@@ -874,7 +874,7 @@ Replace approved prototype visuals with a coherent modern pixel-art presentation
 - [x] M15.8 Add fictional station architecture/signage and local context through vegetation, practical structures, props, and railway details. Add station text programmatically/manual; never rely on generated fake text. Wanasari and Cibiru now use bounded transparent station vignettes with code-rendered names and UI, while the existing station flow and placeholder fallback remain intact.
 - [x] M15.9 Apply the warm train/cool world contrast, restrained fog/mist, limited rain only if it preserves readability, and sparse foreground occlusion. Added a cool environment wash below gameplay actors, code-native warm pools under the train, localized mist, biome-specific low-density rain, and edge-only foreground silhouettes.
 - [x] M15.10 Replace placeholder icons with one consistent functional icon style. Keep the UI industrial/railway utility, flat, restrained, and readable. Added a reusable code-native icon module for gameplay HUD, menu, station, upgrade, pause, result, and volume controls without adding raster UI dependencies.
-- [ ] M15.11 Integrate final assets incrementally with placeholder fallbacks so one bad asset cannot block the game or corrupt unrelated gameplay.
+- [x] M15.11 Integrate final assets incrementally with placeholder fallbacks so one bad asset cannot block the game or corrupt unrelated gameplay. The optional preload catalog now records per-file load state, each render slot retains its existing fallback, and a failed Mist request is covered by browser regression testing.
 
 ### Dependencies
 
@@ -932,6 +932,13 @@ M14 prototype gate. `art-direction.md — Lintas Malam.md` must be consulted for
 - [x] Add matching icons to menu actions, settings volume controls, station actions, upgrade selection, pause, and result actions.
 - [x] Keep icons flat, geometric, low-contrast enough for hierarchy, and code-native so the static PHP-hosted build has no additional image requests.
 - [x] Add diagnostics and a browser test confirming one shared `railway-code-native` icon style is present in menu and gameplay.
+
+### M15.11 completion notes
+
+- [x] Initialize every optional image with a safe fallback state and update it to `loaded` only after the Phaser texture exists.
+- [x] Capture individual Phaser `loaderror` events without making the optional art queue a required boot dependency.
+- [x] Expose deterministic `data-asset-fallbacks` and `data-asset-status` diagnostics for hosting and QA checks.
+- [x] Verify with unit tests and a browser test that one failed enemy image falls back while unrelated train and biome assets remain active.
 
 ## M16 — Audio and polish
 

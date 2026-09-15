@@ -3,6 +3,9 @@ export interface OptionalImageAsset {
   url: string;
 }
 
+export type OptionalAssetLoadState = 'loaded' | 'fallback';
+export type OptionalAssetStatus = Record<string, OptionalAssetLoadState>;
+
 // Keep URLs relative so the static build works at the domain root and in a PHP-hosted subfolder.
 export const OPTIONAL_IMAGE_ASSETS = {
   playerIdle: {
@@ -147,3 +150,21 @@ export const STATION_IMAGE_ASSETS = {
   WANASARI: OPTIONAL_IMAGE_ASSETS.stationWanasari,
   CIBIRU: OPTIONAL_IMAGE_ASSETS.stationCibiru,
 } as const;
+
+export function createOptionalAssetStatus(): OptionalAssetStatus {
+  return Object.fromEntries(
+    Object.values(OPTIONAL_IMAGE_ASSETS).map((asset) => [asset.key, 'fallback' as const]),
+  );
+}
+
+export function listOptionalAssetFallbacks(status: OptionalAssetStatus): string[] {
+  return Object.values(OPTIONAL_IMAGE_ASSETS)
+    .filter((asset) => status[asset.key] === 'fallback')
+    .map((asset) => asset.key);
+}
+
+export function formatOptionalAssetStatus(status: OptionalAssetStatus): string {
+  return Object.values(OPTIONAL_IMAGE_ASSETS)
+    .map((asset) => `${asset.key}:${status[asset.key] ?? 'fallback'}`)
+    .join(',');
+}

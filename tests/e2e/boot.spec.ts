@@ -53,6 +53,32 @@ test('loads the M15 player master while keeping the fallback boundary observable
   expect(consoleErrors.filter((message) => /player_idle|missing texture/i.test(message))).toEqual([]);
 });
 
+test('keeps gameplay running when one optional art file fails and preserves unrelated art', async ({ page }) => {
+  await page.route('**/assets/enemies/mist/mist_idle.png', (route) => route.abort());
+  await page.goto('/');
+
+  const status = page.locator('#app-status');
+  await expect(status).toHaveAttribute('data-screen', 'main-menu');
+  await expect(status).toHaveAttribute('data-asset-fallbacks', /art-enemy-mist/);
+
+  const canvas = page.locator('canvas');
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) return;
+
+  await page.mouse.click(box.x + box.width * (960 / 1920), box.y + box.height * (560 / 1080));
+  await expect(status).toHaveAttribute('data-screen', 'gameplay');
+  await expect(status).toHaveAttribute('data-enemy-art', 'MIST:placeholder,SHADOW:art,KEEPER:art');
+  await expect(status).toHaveAttribute(
+    'data-train-art',
+    'DEFENSE:art,WORKSHOP:art,PASSENGER:art,LOCOMOTIVE:art',
+  );
+  await expect(status).toHaveAttribute(
+    'data-biome-art',
+    'FARMLAND:art,art,art|PLANTATION_FOREST:art,art,art|HIGHLAND_NIGHT:art,art,art',
+  );
+});
+
 test('loads all four M15.5 train section sprites without changing the train slots', async ({ page }) => {
   await page.goto('/');
   const canvas = page.locator('canvas');

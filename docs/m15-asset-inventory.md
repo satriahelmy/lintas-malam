@@ -1,6 +1,6 @@
 # M15 Asset Inventory & Batch Specifications
 
-Status: M15 in progress. Batch 1 player art, Batch 2 train section art, Batch 3 character/enemy masters, Batch 4 biome strips, Batch 5 station vignettes, the M15.9 atmosphere pass, and the M15.10 code-native UI icon pass are integrated behind placeholder fallbacks. Final FX remain pending. This document is the approval record for each art batch and the mapping between generated assets and existing prototype render slots.
+Status: M15 in progress. Batch 1 player art, Batch 2 train section art, Batch 3 character/enemy masters, Batch 4 biome strips, Batch 5 station vignettes, the M15.9 atmosphere pass, and the M15.10 code-native UI icon pass are integrated behind placeholder fallbacks. M15.11 now records per-file load status and verifies that a failed optional request does not block gameplay or unrelated art. Final FX remain pending. This document is the approval record for each art batch and the mapping between generated assets and existing prototype render slots.
 
 ## Shared art contract
 
@@ -186,6 +186,14 @@ Batch 5 uses one bounded transparent vignette per V1 station. These are overlay-
 - Wanasari and Cibiru were inspected for silhouette, station identity, local railway context, transparent alpha, accidental text, and readability behind the station overlay.
 - The two stations are visually distinct without adding a new gameplay mechanic: Wanasari reads as the first rural stop; Cibiru reads as a wetter, more isolated plantation stop.
 - The existing data-driven station flow remains unchanged. The E2E station test confirms both station assets load and the route still opens Wanasari before Cibiru.
+
+## M15.11 runtime fallback contract
+
+- `src/scenes/preload-scene.ts` treats every current image as optional and records a `loaded` or `fallback` state per catalog key.
+- A Phaser `loaderror` marks only the failed key as `fallback`; the preload queue continues and the menu remains reachable.
+- Gameplay render slots independently check `textures.exists()` and keep their code-native shape, color band, marker, or panel when an image is unavailable.
+- `data-asset-fallbacks` and `data-asset-status` expose the current catalog state for QA without changing gameplay state or route data.
+- The M15.11 browser test aborts the Mist image request and confirms gameplay still boots, Mist uses its placeholder, and train plus biome art remain loaded.
 
 ## Generation and approval log
 

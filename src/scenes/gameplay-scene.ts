@@ -10,7 +10,10 @@ import {
   BOSS_IMAGE_ASSET,
   BIOME_IMAGE_ASSETS,
   ENEMY_IMAGE_ASSETS,
+  formatOptionalAssetStatus,
+  listOptionalAssetFallbacks,
   OPTIONAL_IMAGE_ASSETS,
+  type OptionalAssetStatus,
   STATION_IMAGE_ASSETS,
   SURVIVOR_IMAGE_ASSETS,
   TRAIN_IMAGE_ASSETS,
@@ -2720,6 +2723,9 @@ export class GameplayScene extends Phaser.Scene {
     const telemetry = session?.run?.telemetry;
     status.dataset.playerDamageTaken = String(telemetry?.playerDamageTaken ?? 0);
     status.dataset.playerArt = this.playerSprite ? OPTIONAL_IMAGE_ASSETS.playerIdle.key : 'placeholder-player';
+    const assetStatus = this.registry.get('optionalAssetStatus') as OptionalAssetStatus | undefined;
+    status.dataset.assetFallbacks = assetStatus ? listOptionalAssetFallbacks(assetStatus).join(',') : '';
+    status.dataset.assetStatus = assetStatus ? formatOptionalAssetStatus(assetStatus) : '';
     status.dataset.trainArt = this.trainViews.map((view) => `${view.sectionId}:${view.sprite ? 'art' : 'placeholder'}`).join(',');
     status.dataset.enemyArt = (Object.entries(ENEMY_IMAGE_ASSETS) as [EnemyArchetype, { key: string }][])
       .map(([archetype, asset]) => `${archetype}:${this.textures.exists(asset.key) ? 'art' : 'placeholder'}`)
